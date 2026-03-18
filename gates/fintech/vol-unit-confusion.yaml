@@ -1,0 +1,33 @@
+id: vol-unit-confusion
+title: "Volatility Unit Convention Hook — Silent Gain/Loss Bug Prevention"
+description: >
+  Detect code that double-scales volatility values by applying a conversion
+  to a field that is already stored in the target unit. Prevents the single most
+  common source of false crash triggers and missed recovery conditions in DeFi
+  strategy simulations.
+category: financial-invariants
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  Detect code that applies / sqrt(N) or * 100 to a field already stored as
+  percentage-per-period. Flag any code path where a vol field annotated as
+  pct_per_period is divided by sqrt() or multiplied by 100 without a unit
+  conversion comment. Label the hook with the exact field names used in the
+  codebase. Configurable: provide the list of annotated vol field names in
+  .forgecraft/vol-fields.yaml.
+passCriterion: >
+  Zero double-scaling patterns detected on annotated vol fields. All sqrt()
+  divisions on vol fields have a // unit: raw_decimal -> pct_per_period comment.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Unit confusion in vol calculations is the single most common source of both
+  false crash triggers and missed recovery conditions in DeFi strategies.
+  A strategy that divides an already-annualized vol by sqrt(365) is 19x off on
+  crash detection thresholds. The bug is invisible in unit tests because the
+  wrong value passes all plausibility checks — the check must be semantic, not
+  numeric.
+status: approved
+approvedAt: "2026-03-01"
+contributor: "jghiringhelli"

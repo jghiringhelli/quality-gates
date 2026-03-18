@@ -1,0 +1,12 @@
+{
+  "name": "quality-gates",
+  "version": "1.0.0",
+  "description": "genspec-dev canonical quality gates registry",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-index.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

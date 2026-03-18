@@ -1,0 +1,35 @@
+name: Build Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "gates/**"
+      - "scripts/build-index.js"
+
+permissions:
+  contents: write
+
+jobs:
+  build-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Regenerate index.json
+        run: npm run build
+
+      - name: Commit updated index.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: regenerate index.json [skip ci]"
+          file_pattern: index.json

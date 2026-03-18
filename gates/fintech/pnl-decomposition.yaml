@@ -1,0 +1,29 @@
+id: pnl-decomposition
+title: "P&L Decomposition Invariant — Silent Loss Bug Detection"
+description: >
+  After every simulation run, verify that the sum of P&L components equals
+  the total reported P&L. Catches accounting bugs where a component is computed
+  but never wired into the total.
+category: simulation-integrity
+gsProperty: verifiable
+phase: development
+hook: post-run
+check: >
+  After every simulation run, verify: fee_income + price_income == total_pnl +/- 1%.
+  This is a Category A silent loss bug check. If the decomposition fails, accounting
+  components are unlinked and the strategy is earning zero while appearing to run
+  normally. Extend to all components present in the strategy's accounting model.
+  The check must name the exact fields it is comparing and report the delta on failure.
+passCriterion: >
+  |fee_income + price_income - total_pnl| / |total_pnl| < 0.01.
+  Fails immediately with named components and delta if violated.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Real DeFi simulation case: strategy ran for 1,000+ hours reporting zero PnL.
+  Root cause was that fee_income was computed but never added to total_pnl.
+  The strategy appeared healthy (no errors, no crashes) while silently earning
+  nothing. P&L decomposition check would have caught this in the first test run.
+status: approved
+approvedAt: "2026-03-01"
+contributor: "jghiringhelli"

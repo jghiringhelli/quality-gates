@@ -1,0 +1,116 @@
+{
+  "generatedAt": "2026-03-18T22:18:21.612Z",
+  "version": "1",
+  "gateCount": 5,
+  "tags": [
+    "FINTECH",
+    "SIMULATION",
+    "UNIVERSAL"
+  ],
+  "gates": [
+    {
+      "id": "pnl-decomposition",
+      "title": "P&L Decomposition Invariant — Silent Loss Bug Detection",
+      "description": "After every simulation run, verify that the sum of P&L components equals the total reported P&L. Catches accounting bugs where a component is computed but never wired into the total.\n",
+      "category": "simulation-integrity",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "post-run",
+      "check": "After every simulation run, verify: fee_income + price_income == total_pnl +/- 1%. This is a Category A silent loss bug check. If the decomposition fails, accounting components are unlinked and the strategy is earning zero while appearing to run normally. Extend to all components present in the strategy's accounting model. The check must name the exact fields it is comparing and report the delta on failure.\n",
+      "passCriterion": "|fee_income + price_income - total_pnl| / |total_pnl| < 0.01. Fails immediately with named components and delta if violated.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Real DeFi simulation case: strategy ran for 1,000+ hours reporting zero PnL. Root cause was that fee_income was computed but never added to total_pnl. The strategy appeared healthy (no errors, no crashes) while silently earning nothing. P&L decomposition check would have caught this in the first test run.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-01",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/pnl-decomposition.yaml"
+    },
+    {
+      "id": "vol-unit-confusion",
+      "title": "Volatility Unit Convention Hook — Silent Gain/Loss Bug Prevention",
+      "description": "Detect code that double-scales volatility values by applying a conversion to a field that is already stored in the target unit. Prevents the single most common source of false crash triggers and missed recovery conditions in DeFi strategy simulations.\n",
+      "category": "financial-invariants",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "Detect code that applies / sqrt(N) or * 100 to a field already stored as percentage-per-period. Flag any code path where a vol field annotated as pct_per_period is divided by sqrt() or multiplied by 100 without a unit conversion comment. Label the hook with the exact field names used in the codebase. Configurable: provide the list of annotated vol field names in .forgecraft/vol-fields.yaml.\n",
+      "passCriterion": "Zero double-scaling patterns detected on annotated vol fields. All sqrt() divisions on vol fields have a // unit: raw_decimal -> pct_per_period comment.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Unit confusion in vol calculations is the single most common source of both false crash triggers and missed recovery conditions in DeFi strategies. A strategy that divides an already-annualized vol by sqrt(365) is 19x off on crash detection thresholds. The bug is invisible in unit tests because the wrong value passes all plausibility checks — the check must be semantic, not numeric.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-01",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/vol-unit-confusion.yaml"
+    },
+    {
+      "id": "dependency-audit",
+      "title": "Dependency CVE Audit — Pre-Commit Blocking Gate",
+      "description": "Audit all project dependencies for known CVEs before every commit. Block on HIGH or CRITICAL vulnerabilities in direct dependencies.\n",
+      "category": "security",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "owasp_asvs_level": 1,
+      "check": "Run the project's ecosystem audit tool before every commit. Block on HIGH or CRITICAL CVEs in direct dependencies. See tools-registry.yaml for ecosystem-specific commands: - Node.js: npm audit --audit-level=high - Python: pip-audit --severity high - Rust: cargo audit --deny warnings - Go: govulncheck ./... - Java: dependency-check --failBuildOnCVSS 7\n",
+      "passCriterion": "Zero HIGH/CRITICAL CVEs in direct dependencies. All transitive CVEs triaged with documented disposition (accepted, remediated, or suppressed with reason).\n",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "generalizable": true,
+      "evidence": "The bcrypt -> @mapbox/node-pre-gyp -> tar CVE chain is a well-known example where a conceptually dev-only dependency introduced a production CVE. Pre-commit audit would have caught this at install time. Supply chain attacks via transitive dependencies are the fastest-growing vulnerability class as of 2025.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-01",
+      "contributor": "jghiringhelli",
+      "_path": "gates/universal/dependency-audit.yaml"
+    },
+    {
+      "id": "mutation-testing",
+      "title": "Mutation Testing Gate — Pre-Release Test Quality Verification",
+      "description": "Verify that the test suite actually catches real bugs by injecting synthetic faults into the codebase and confirming that tests fail when the code is broken.\n",
+      "category": "test-quality",
+      "gsProperty": "verifiable",
+      "phase": "pre-release",
+      "hook": "pre-release",
+      "check": "Run mutation testing on changed files. Inject synthetic bugs: operator replacement (== to !=, + to -, < to <=), boundary inversion (off-by-one), and return value mutation (return null, return empty). If tests don't catch the injected bug, the test suite is checking the wrong things. Minimum score 80% on changed files. Tools: Stryker (JS/TS), PITest (Java), mutmut (Python), cargo-mutants (Rust).\n",
+      "passCriterion": "MSI >= 80% on changed files. No surviving mutants in critical path code (auth, permissions, financial calculations).\n",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "generalizable": true,
+      "evidence": "GS experiments found 40-50% MSI on naive agent-generated test suites. Between 1-2 out of 3 agent-generated tests provide no real coverage. Explicit mutation gate consistently raises this to 80%+.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-01",
+      "contributor": "jghiringhelli",
+      "_path": "gates/universal/mutation-testing.yaml"
+    },
+    {
+      "id": "owasp-l1-static",
+      "title": "OWASP ASVS Level 1 — Static Security Analysis at Commit Time",
+      "description": "Run static security checks on every commit to catch the most common vulnerability classes before they reach code review.\n",
+      "category": "security",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "owasp_asvs_level": 1,
+      "check": "Run a static security analyzer appropriate for the project's language. Checks must cover: (1) hardcoded secrets and credentials, (2) SQL/command injection patterns via string concatenation, (3) eval() with dynamic input, (4) dependency CVEs. See tools-registry.yaml for language-specific tools. These are LEVEL 1 checks: they run at every commit with no human review required.\n",
+      "passCriterion": "Zero HIGH/CRITICAL findings from static analyzer. All pre-commit hooks exit 0.",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "generalizable": true,
+      "evidence": "Static analysis at commit time catches ~70% of OWASP Top 10 issues before they reach code review. SQL injection and hardcoded credential patterns are reliably detected statically without running the application.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-01",
+      "contributor": "jghiringhelli",
+      "_path": "gates/universal/owasp-l1-static.yaml"
+    }
+  ]
+}

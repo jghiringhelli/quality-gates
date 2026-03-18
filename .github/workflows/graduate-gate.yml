@@ -1,0 +1,123 @@
+name: Graduate Approved Gate
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  graduate:
+    if: github.event.label.name == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Extract and graduate gate from issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body ?? "";
+
+            // Extract gate ID from issue body (format: **ID**: `gate-id`)
+            const idMatch = body.match(/\*\*ID\*\*:\s*`([^`]+)`/);
+            if (!idMatch) {
+              core.setFailed("Could not extract gate ID from issue body");
+              return;
+            }
+            const gateId = idMatch[1];
+
+            // Extract tags to determine category
+            const tagMatch = body.match(/\*\*Tags\*\*:\s*([^\n]+)/);
+            const tags = tagMatch ? tagMatch[1].split(",").map(t => t.trim()) : ["UNIVERSAL"];
+            const category = tags.some(t => t.includes("FINTECH")) ? "fintech" : "universal";
+
+            const quarantinePath = `gates/quarantine/${gateId}.yaml`;
+            const targetPath = `gates/${category}/${gateId}.yaml`;
+
+            // Check if quarantine file exists
+            let fileContent;
+            try {
+              const { data } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: quarantinePath,
+              });
+              fileContent = Buffer.from(data.content, "base64").toString("utf-8");
+            } catch {
+              core.warning(`No quarantine file found at ${quarantinePath} — skipping graduate step`);
+              return;
+            }
+
+            // Update status in YAML content
+            const updatedContent = fileContent
+              .replace(/^status: .*$/m, "status: approved")
+              .replace(/^approvedAt: .*$/m, `approvedAt: "${new Date().toISOString().split("T")[0]}"`)
+              || fileContent + `\nstatus: approved\napprovedAt: "${new Date().toISOString().split("T")[0]}"\n`;
+
+            const branchName = `graduate/${gateId}`;
+
+            // Create branch
+            const { data: ref } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "heads/main",
+            });
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: ref.object.sha,
+            });
+
+            // Get old file SHA for deletion
+            const { data: oldFile } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: quarantinePath,
+            });
+
+            // Create new file in target path
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: targetPath,
+              message: `gate: Graduate ${gateId} to ${category}`,
+              content: Buffer.from(updatedContent).toString("base64"),
+              branch: branchName,
+            });
+
+            // Delete quarantine file
+            await github.rest.repos.deleteFile({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: quarantinePath,
+              message: `gate: Remove ${gateId} from quarantine`,
+              sha: oldFile.sha,
+              branch: branchName,
+            });
+
+            // Open PR
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `gate: Graduate ${gateId} from quarantine`,
+              body: `Closes #${issue.number}\n\nGraduates \`${gateId}\` from quarantine to \`gates/${category}/\`.`,
+              head: branchName,
+              base: "main",
+            });
+
+            core.info(`PR opened to graduate ${gateId} to gates/${category}/`);
