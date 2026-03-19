@@ -1,0 +1,41 @@
+id: bootstrap-bypass-detection
+title: "Bootstrap Bypass Detection — Full Position Required for RUNNING State Resume"
+description: >
+  Verify that the state machine's position detection logic requires ALL THREE components
+  (LP position + AAVE debt + short hedge) before resuming the RUNNING state. Also verify
+  that crash reinstatement leaves capital in the wallet undeployed, not pre-deployed as
+  collateral. Prevents recovery paths that short-circuit to RUNNING with an incomplete
+  position, causing the engine to run indefinitely with no productive activity.
+category: state-machine-correctness
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  SM-03: The pre-commit hook verifies that _detect_positions() (or equivalent position
+  detection function) returns False — and does NOT transition to RUNNING — unless ALL
+  THREE conditions are true simultaneously: (1) LP position exists and is in range,
+  (2) AAVE debt > 0, (3) short hedge position exists with size > 0. Partial position
+  detection (e.g., collateral > 0 without LP) must not trigger RUNNING state. The hook
+  enforces that a unit test exists with the following assertion:
+  assert _detect_positions() returns False when LP is missing even if collateral > 0.
+  SM-07: Verify that crash reinstatement logic (the path taken when recovering from an
+  unclean shutdown) leaves capital in the wallet in an undeployed state. Any reinstatement
+  function that pre-deploys collateral or opens positions as part of recovery must be
+  flagged — recovery must restore wallet balance, not replicate a deployed state.
+passCriterion: >
+  _detect_positions() returns False when any of LP, debt, or short is missing, regardless
+  of other component states. Unit test for LP-missing-but-collateral-present case exists
+  and passes. Crash reinstatement functions do not deploy capital or open positions.
+tags: [FINTECH, STATE-MACHINE]
+generalizable: false
+evidence: >
+  Recovery path pre-seeded AAVE collateral as part of crash reinstatement. _detect_positions()
+  saw collateral > 0 and short-circuited to RUNNING state with no LP deployed and no hedge.
+  The engine ran for 1 full year emitting zero trades and zero fee income. The bug passed all
+  unit tests because the test fixtures used the same short-circuit: they set collateral > 0
+  to simulate RUNNING state, masking the fact that LP absence should have prevented that
+  transition. Required test: assert _detect_positions() returns False when LP is missing
+  even if collateral exists.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

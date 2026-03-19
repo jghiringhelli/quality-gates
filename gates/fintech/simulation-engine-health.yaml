@@ -1,0 +1,37 @@
+id: simulation-engine-health
+title: "Simulation Engine Health — Error State, Capital Floor, and Activity Check"
+description: >
+  After every simulation run, verify that the engine spent the majority of time in
+  productive states, maintained minimum capital throughout, and produced enough state
+  transitions to confirm genuine activity. Catches engines that silently stall, loop
+  in recovery, or lose all capital while reporting a completed run.
+category: simulation-integrity
+gsProperty: verifiable
+phase: development
+hook: post-run
+check: >
+  After every simulation run, assert all three conditions:
+  (1) SIM-02: fraction of ticks spent in ERROR or RECOVERY state must be < 10% of
+  total simulation ticks. Report exact percentage and tick counts on failure.
+  (2) SIM-03: engine capital must never drop below 10% of starting capital at any
+  recorded snapshot. Report the minimum capital observed and the timestamp.
+  (3) SIM-07: for a full-year simulation run (>= 8,000 hours), total state transitions
+  logged by the engine must exceed 100. A run with fewer transitions indicates the
+  state machine was frozen or bypassed. Report exact transition count on failure.
+  All three checks are mandatory — a run that passes two and fails one is a failed run.
+passCriterion: >
+  Error/recovery state fraction < 10% of total ticks.
+  Minimum capital >= 10% of starting capital at all snapshots.
+  State transition count > 100 for full-year runs.
+  All three conditions must pass; partial pass is a failure.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Engine that spent 60% of simulation time in RECOVERY state emitted zero trades while
+  appearing to complete successfully. No exception was raised; the run output was
+  structurally valid. The capital floor check would have caught total-loss scenarios
+  that silently passed as completed runs. The transition count check would have flagged
+  the frozen state machine that never left RECOVERY on the first post-run validation.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

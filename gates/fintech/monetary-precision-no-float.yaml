@@ -1,0 +1,39 @@
+id: monetary-precision-no-float
+title: "Monetary Precision — No Float for On-Chain Financial Math"
+description: >
+  Detect and block the use of float literals and float() casts in code that handles
+  on-chain monetary values. All financial calculations involving wei, token amounts,
+  balances, or fee income must use Decimal or integer arithmetic. Float precision loss
+  accumulates silently over long simulation runs and live deployments.
+category: financial-invariants
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  FIN-01: Pre-commit hook scans files that handle monetary values (identified by any of:
+  imports of web3, eth_account, uniswap, aave, or presence of variable patterns
+  ending in _wei, _amount, _balance, _fee, _income, _cost) for the following patterns:
+  (1) float() calls where the argument is a variable with a monetary suffix
+      — pattern: `float\(.*(_wei|_amount|_balance|_fee|_income|_cost)\)`.
+  (2) Float literals used in arithmetic with monetary variables
+      — pattern: `(_wei|_amount|_balance)\s*[\*\/\+\-]\s*[0-9]+\.[0-9]+`.
+  (3) Direct float arithmetic on variables named with monetary suffixes
+      — pattern: `[a-z_]*(wei|amount|balance|fee|income|cost)\s*=\s*[^D][^e][^c].*[\*\/\+\-]`.
+  Report file, line number, variable name, and the offending expression on failure.
+  Configurable: additional monetary variable suffix patterns in forgecraft.yaml.
+passCriterion: >
+  Zero float() casts or float literals in arithmetic expressions involving variables
+  with monetary suffixes in files that import web3, eth_account, uniswap, or aave.
+  All monetary math uses Decimal, int (wei), or an audited fixed-point library.
+tags: [FINTECH, WEB3]
+generalizable: false
+evidence: >
+  Float precision loss in an LP fee calculation caused a cumulative accounting error of
+  $340 over 1,000 simulation hours. The error was undetectable without explicit decimal
+  precision tracking — each individual tick calculation was off by less than $0.001,
+  well within plausibility checks, but the error compounded consistently across 1,000,000
+  ticks. The root cause was a single float() cast converting a Decimal fee amount before
+  summing it into the running total.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

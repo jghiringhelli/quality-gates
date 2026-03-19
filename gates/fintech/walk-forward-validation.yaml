@@ -1,0 +1,38 @@
+id: walk-forward-validation
+title: "Walk-Forward Validation — Parameter Generalization Across Time Windows"
+description: >
+  Before releasing optimized strategy parameters, verify that they generalize across
+  at least three non-overlapping time windows. Catches parameters that are overfit to a
+  specific market regime and will fail catastrophically when that regime ends.
+category: simulation-integrity
+gsProperty: verifiable
+phase: pre-release
+hook: pre-release
+check: >
+  SIM-10: Before accepting any optimized parameter set as a release candidate, run the
+  strategy with those parameters across at least 3 non-overlapping historical time
+  windows of equal length. Windows must collectively cover distinct market regimes
+  (trending, sideways, volatile). For each window, record: total_pnl, max_drawdown,
+  sharpe_ratio, and liquidation_count. A parameter set passes only if:
+  - It produces positive total_pnl in at least 2 of 3 windows.
+  - It produces zero liquidations in all 3 windows.
+  - The worst-window Sharpe is >= -0.5 (strategy does not catastrophically fail).
+  Report per-window results in the release artifact. Optimizer journals must record
+  the walk-forward result alongside the optimization score.
+passCriterion: >
+  Positive total_pnl in >= 2 of 3 non-overlapping time windows.
+  Zero liquidations across all 3 windows.
+  Worst-window Sharpe >= -0.5.
+  Per-window results recorded in release artifact.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Optimizer tuned parameters to a 1-year bull market period. The parameter set achieved
+  exceptional Sharpe and drawdown metrics on the training window. When deployed into a
+  sideways market, the strategy catastrophically failed — parameters sized positions
+  assuming sustained directional movement that never materialized. Walk-forward validation
+  across 3 windows (bull, sideways, bear) would have shown a 2/3 failure rate and
+  zero liquidations only in the bull window, blocking release before deployment.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

@@ -1,0 +1,41 @@
+id: state-direct-mutation-prevention
+title: "State Direct Mutation Prevention — All Transitions Through engine.trigger()"
+description: >
+  Detect and block direct assignments to the state field outside of the designated
+  transition method. All state machine transitions must go through engine.trigger()
+  or the equivalent _set_state() method so that transition guards, entry/exit hooks,
+  and audit logging are always executed. Applies to any project using a state machine
+  pattern, not only DeFi simulations.
+category: state-machine-correctness
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  SM-02: Pre-commit hook scans all Python/TypeScript files for direct assignment to
+  the state field outside of the transition trigger method. Pattern to detect:
+  `self\.state\s*=` (Python) or `this\.state\s*=` (TypeScript/JavaScript) appearing
+  in any function other than trigger(), _set_state(), or __init__() / constructor().
+  The state field name is configurable in forgecraft.yaml (default: "state").
+  The list of permitted setter methods is configurable (default: ["trigger", "_set_state"]).
+  All matches outside permitted methods must be reported with file, line number,
+  and the surrounding function name. Zero tolerance — any match fails the hook.
+  Also flag direct state assignments in test fixture setup: test files using
+  `self.engine.state =` or `engine.state =` directly are masking the same bug class
+  and must use a test-safe setter or a factory that produces an engine in the desired state.
+passCriterion: >
+  Zero occurrences of direct state field assignment outside permitted setter methods
+  in source files. Zero direct state assignments in test fixture setup code.
+tags: [FINTECH, STATE-MACHINE]
+generalizable: true
+evidence: >
+  Direct state assignment in test fixture setup bypassed all transition guards. The
+  engine entered RUNNING state without any position deployed because the test set
+  self.state = "RUNNING" directly, skipping the guard that verifies LP + debt + short
+  are all present. All guard conditions in the TRANSITIONS config were skipped. The
+  bug passed all unit tests because the tests used the same anti-pattern in setup —
+  direct state assignment in fixtures masked the broken guard by never invoking it.
+  The fix required both removing the direct assignment from source and replacing
+  direct assignment in all test fixtures with proper factory methods.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

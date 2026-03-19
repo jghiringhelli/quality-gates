@@ -1,0 +1,43 @@
+id: optimizer-journal-versioning
+title: "Optimizer Journal Versioning — Commit SHA Tagging and Audit Metadata"
+description: >
+  Optimizer journals must be tagged with the engine commit SHA at creation time.
+  Journals produced on a different engine version must not be resumed or merged into
+  the same optimization run. All audit database entries must store commit SHA, config
+  hash, and price data version. Prevents optimization results from accumulating on a
+  buggy engine and being accepted as valid.
+category: data-pipeline
+gsProperty: accountable
+phase: continuous
+hook: pre-release
+check: >
+  SIG-07 / DP-03: Before resuming or extending any optimizer journal (CMA-ES population
+  state, Bayesian prior, or equivalent), verify that the journal's recorded engine_commit_sha
+  matches the current HEAD commit SHA. If they differ, the journal must not be resumed —
+  it must be archived and a new journal started. The pre-release hook scans all journal
+  files in the optimizer output directory and fails if any journal lacks an engine_commit_sha
+  field or if any journal's SHA differs from HEAD.
+  DP-01: Verify that price history data files are versioned and that the version is
+  recorded in each optimizer journal. Journals referencing different price versions
+  are incompatible and must not be merged.
+  DP-02: Verify that the audit database (optimization results store) contains the
+  following fields for every entry: engine_commit_sha, config_hash, price_data_version,
+  run_timestamp. Entries missing any of these fields must be flagged as unauditable
+  and excluded from parameter selection.
+passCriterion: >
+  All optimizer journals have engine_commit_sha matching current HEAD.
+  All journals have a price_data_version field.
+  All audit database entries contain engine_commit_sha, config_hash, price_data_version,
+  and run_timestamp. Journals from non-matching SHA are archived, not resumed.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  130 CMA-ES optimizer runs accumulated on an engine with a known fee calculation bug.
+  The "optimal" parameters discovered by the optimizer were exploiting the bug —
+  they maximized fee income in a model where fees were overcounted by 3x. After the
+  bug was fixed, all 130 journals were invalid but indistinguishable from valid ones
+  without manual inspection. SHA tagging would have automatically invalidated all
+  pre-fix journals on the next run, forcing a fresh optimization on the corrected engine.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

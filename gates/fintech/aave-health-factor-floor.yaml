@@ -1,0 +1,39 @@
+id: aave-health-factor-floor
+title: "AAVE Health Factor Floor — Liquidation Risk and Borrowing Rate Invariants"
+description: >
+  During simulation runs, assert that the AAVE health factor never drops below 1.05
+  and that a non-zero borrowing rate is recorded whenever AAVE debt exists. Enforced
+  at both the tick level during the run and in the post-run summary. Prevents invalid
+  parameter sets from being accepted after a silent liquidation approach or a zero-cost
+  borrow anomaly.
+category: financial-invariants
+gsProperty: defended
+phase: development
+hook: post-run
+check: >
+  FIN-07: At every simulation tick where AAVE debt > 0, assert health_factor >= 1.05.
+  A breach means the position approached or crossed the liquidation threshold. The
+  assertion must halt the run immediately on first breach and log: timestamp, health_factor
+  observed, collateral value, debt value, and the tick index. This is a tick-level guard,
+  not a post-run aggregate — the run must not continue past a health_factor < 1.05 event.
+  SIM-04: In post-run output, assert that borrowing_rate > 0 for every hour where
+  AAVE debt > 0. A zero borrowing rate when debt exists indicates that borrowing costs
+  were not modeled, making the PnL calculation invalid. Report total hours with debt
+  and hours with zero borrowing_rate on failure.
+  Both checks are mandatory and independent.
+passCriterion: >
+  health_factor >= 1.05 at every tick where AAVE debt > 0; run halted immediately on breach.
+  borrowing_rate > 0 for all hours where AAVE debt > 0 in post-run output.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Strategy ran 200 hours before liquidation. The health factor dropped to 1.03 over a
+  4-hour window — a gradual degradation that no aggregate post-run metric caught because
+  the run appeared to complete normally (it liquidated at hour 200, not hour 204). A
+  tick-level assertion at health_factor < 1.05 would have halted the run at hour 196,
+  flagged the parameter set as unsafe, and prevented it from being accepted as a valid
+  optimization result. The borrowing rate check would have separately caught a 48-hour
+  window where debt existed but zero borrowing cost was recorded, inflating the PnL.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

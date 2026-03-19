@@ -1,13 +1,120 @@
 {
-  "generatedAt": "2026-03-18T22:18:21.612Z",
+  "generatedAt": "2026-03-19T01:03:22.802Z",
   "version": "1",
-  "gateCount": 5,
+  "gateCount": 15,
   "tags": [
     "FINTECH",
     "SIMULATION",
-    "UNIVERSAL"
+    "STATE-MACHINE",
+    "UNIVERSAL",
+    "WEB3"
   ],
   "gates": [
+    {
+      "id": "aave-health-factor-floor",
+      "title": "AAVE Health Factor Floor — Liquidation Risk and Borrowing Rate Invariants",
+      "description": "During simulation runs, assert that the AAVE health factor never drops below 1.05 and that a non-zero borrowing rate is recorded whenever AAVE debt exists. Enforced at both the tick level during the run and in the post-run summary. Prevents invalid parameter sets from being accepted after a silent liquidation approach or a zero-cost borrow anomaly.\n",
+      "category": "financial-invariants",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "post-run",
+      "check": "FIN-07: At every simulation tick where AAVE debt > 0, assert health_factor >= 1.05. A breach means the position approached or crossed the liquidation threshold. The assertion must halt the run immediately on first breach and log: timestamp, health_factor observed, collateral value, debt value, and the tick index. This is a tick-level guard, not a post-run aggregate — the run must not continue past a health_factor < 1.05 event. SIM-04: In post-run output, assert that borrowing_rate > 0 for every hour where AAVE debt > 0. A zero borrowing rate when debt exists indicates that borrowing costs were not modeled, making the PnL calculation invalid. Report total hours with debt and hours with zero borrowing_rate on failure. Both checks are mandatory and independent.\n",
+      "passCriterion": "health_factor >= 1.05 at every tick where AAVE debt > 0; run halted immediately on breach. borrowing_rate > 0 for all hours where AAVE debt > 0 in post-run output.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Strategy ran 200 hours before liquidation. The health factor dropped to 1.03 over a 4-hour window — a gradual degradation that no aggregate post-run metric caught because the run appeared to complete normally (it liquidated at hour 200, not hour 204). A tick-level assertion at health_factor < 1.05 would have halted the run at hour 196, flagged the parameter set as unsafe, and prevented it from being accepted as a valid optimization result. The borrowing rate check would have separately caught a 48-hour window where debt existed but zero borrowing cost was recorded, inflating the PnL.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/aave-health-factor-floor.yaml"
+    },
+    {
+      "id": "bootstrap-bypass-detection",
+      "title": "Bootstrap Bypass Detection — Full Position Required for RUNNING State Resume",
+      "description": "Verify that the state machine's position detection logic requires ALL THREE components (LP position + AAVE debt + short hedge) before resuming the RUNNING state. Also verify that crash reinstatement leaves capital in the wallet undeployed, not pre-deployed as collateral. Prevents recovery paths that short-circuit to RUNNING with an incomplete position, causing the engine to run indefinitely with no productive activity.\n",
+      "category": "state-machine-correctness",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "SM-03: The pre-commit hook verifies that _detect_positions() (or equivalent position detection function) returns False — and does NOT transition to RUNNING — unless ALL THREE conditions are true simultaneously: (1) LP position exists and is in range, (2) AAVE debt > 0, (3) short hedge position exists with size > 0. Partial position detection (e.g., collateral > 0 without LP) must not trigger RUNNING state. The hook enforces that a unit test exists with the following assertion: assert _detect_positions() returns False when LP is missing even if collateral > 0. SM-07: Verify that crash reinstatement logic (the path taken when recovering from an unclean shutdown) leaves capital in the wallet in an undeployed state. Any reinstatement function that pre-deploys collateral or opens positions as part of recovery must be flagged — recovery must restore wallet balance, not replicate a deployed state.\n",
+      "passCriterion": "_detect_positions() returns False when any of LP, debt, or short is missing, regardless of other component states. Unit test for LP-missing-but-collateral-present case exists and passes. Crash reinstatement functions do not deploy capital or open positions.\n",
+      "tags": [
+        "FINTECH",
+        "STATE-MACHINE"
+      ],
+      "generalizable": false,
+      "evidence": "Recovery path pre-seeded AAVE collateral as part of crash reinstatement. _detect_positions() saw collateral > 0 and short-circuited to RUNNING state with no LP deployed and no hedge. The engine ran for 1 full year emitting zero trades and zero fee income. The bug passed all unit tests because the test fixtures used the same short-circuit: they set collateral > 0 to simulate RUNNING state, masking the fact that LP absence should have prevented that transition. Required test: assert _detect_positions() returns False when LP is missing even if collateral exists.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/bootstrap-bypass-detection.yaml"
+    },
+    {
+      "id": "lp-range-entry-guard",
+      "title": "LP Range Entry Guard — Valid Range at Position Creation and Fee/Width Correlation",
+      "description": "At LP position creation time, assert that the current price is within the specified range (lower < current_price < upper). Also verify that fee income correlates positively with LP range width — a wider range that produces lower fees indicates a broken fee model. Prevents the entire class of \"out-of-range from day 1\" bugs and fee model inversion anomalies.\n",
+      "category": "financial-invariants",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "FIN-06: At every LP position creation event (add_liquidity, mint, or equivalent), assert: lower_tick_price < current_price < upper_tick_price. This is a runtime guard executed at position creation time, not post-run. If violated, raise an exception and log: lower_bound, upper_bound, current_price, and the tick at which the position was created. The pre-commit hook verifies that any function that creates an LP position contains this assertion or calls a validator that includes it. FIN-10: In simulation output, verify that fee_income correlates positively with LP range width (upper - lower). If a parameter sweep shows that wider ranges consistently produce lower fee income than narrower ranges at the same price level, the fee model has an inversion bug. Flag any result set where the Pearson correlation between range_width and fee_income is < 0 across >= 5 parameter sweep entries.\n",
+      "passCriterion": "lower_tick_price < current_price < upper_tick_price asserted at every LP position creation. Exception raised and run halted if violated. No negative correlation between LP range width and fee income across parameter sweeps.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "LP deployed out of range immediately earned $0 fees for 800 hours. The entry guard is a 2-line check at position creation time — the entire class of \"out-of-range from day 1\" bugs is prevented by a single assertion that takes under a millisecond to evaluate. The fee/width correlation check would have additionally caught a fee model bug where the fee calculation used a fixed range width constant, causing wider ranges to report proportionally less fee income despite identical in-range time.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/lp-range-entry-guard.yaml"
+    },
+    {
+      "id": "monetary-precision-no-float",
+      "title": "Monetary Precision — No Float for On-Chain Financial Math",
+      "description": "Detect and block the use of float literals and float() casts in code that handles on-chain monetary values. All financial calculations involving wei, token amounts, balances, or fee income must use Decimal or integer arithmetic. Float precision loss accumulates silently over long simulation runs and live deployments.\n",
+      "category": "financial-invariants",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "FIN-01: Pre-commit hook scans files that handle monetary values (identified by any of: imports of web3, eth_account, uniswap, aave, or presence of variable patterns ending in _wei, _amount, _balance, _fee, _income, _cost) for the following patterns: (1) float() calls where the argument is a variable with a monetary suffix\n    — pattern: `float\\(.*(_wei|_amount|_balance|_fee|_income|_cost)\\)`.\n(2) Float literals used in arithmetic with monetary variables\n    — pattern: `(_wei|_amount|_balance)\\s*[\\*\\/\\+\\-]\\s*[0-9]+\\.[0-9]+`.\n(3) Direct float arithmetic on variables named with monetary suffixes\n    — pattern: `[a-z_]*(wei|amount|balance|fee|income|cost)\\s*=\\s*[^D][^e][^c].*[\\*\\/\\+\\-]`.\nReport file, line number, variable name, and the offending expression on failure. Configurable: additional monetary variable suffix patterns in forgecraft.yaml.\n",
+      "passCriterion": "Zero float() casts or float literals in arithmetic expressions involving variables with monetary suffixes in files that import web3, eth_account, uniswap, or aave. All monetary math uses Decimal, int (wei), or an audited fixed-point library.\n",
+      "tags": [
+        "FINTECH",
+        "WEB3"
+      ],
+      "generalizable": false,
+      "evidence": "Float precision loss in an LP fee calculation caused a cumulative accounting error of $340 over 1,000 simulation hours. The error was undetectable without explicit decimal precision tracking — each individual tick calculation was off by less than $0.001, well within plausibility checks, but the error compounded consistently across 1,000,000 ticks. The root cause was a single float() cast converting a Decimal fee amount before summing it into the running total.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/monetary-precision-no-float.yaml"
+    },
+    {
+      "id": "optimizer-journal-versioning",
+      "title": "Optimizer Journal Versioning — Commit SHA Tagging and Audit Metadata",
+      "description": "Optimizer journals must be tagged with the engine commit SHA at creation time. Journals produced on a different engine version must not be resumed or merged into the same optimization run. All audit database entries must store commit SHA, config hash, and price data version. Prevents optimization results from accumulating on a buggy engine and being accepted as valid.\n",
+      "category": "data-pipeline",
+      "gsProperty": "accountable",
+      "phase": "continuous",
+      "hook": "pre-release",
+      "check": "SIG-07 / DP-03: Before resuming or extending any optimizer journal (CMA-ES population state, Bayesian prior, or equivalent), verify that the journal's recorded engine_commit_sha matches the current HEAD commit SHA. If they differ, the journal must not be resumed — it must be archived and a new journal started. The pre-release hook scans all journal files in the optimizer output directory and fails if any journal lacks an engine_commit_sha field or if any journal's SHA differs from HEAD. DP-01: Verify that price history data files are versioned and that the version is recorded in each optimizer journal. Journals referencing different price versions are incompatible and must not be merged. DP-02: Verify that the audit database (optimization results store) contains the following fields for every entry: engine_commit_sha, config_hash, price_data_version, run_timestamp. Entries missing any of these fields must be flagged as unauditable and excluded from parameter selection.\n",
+      "passCriterion": "All optimizer journals have engine_commit_sha matching current HEAD. All journals have a price_data_version field. All audit database entries contain engine_commit_sha, config_hash, price_data_version, and run_timestamp. Journals from non-matching SHA are archived, not resumed.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "130 CMA-ES optimizer runs accumulated on an engine with a known fee calculation bug. The \"optimal\" parameters discovered by the optimizer were exploiting the bug — they maximized fee income in a model where fees were overcounted by 3x. After the bug was fixed, all 130 journals were invalid but indistinguishable from valid ones without manual inspection. SHA tagging would have automatically invalidated all pre-fix journals on the next run, forcing a fresh optimization on the corrected engine.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/optimizer-journal-versioning.yaml"
+    },
     {
       "id": "pnl-decomposition",
       "title": "P&L Decomposition Invariant — Silent Loss Bug Detection",
@@ -16,8 +123,8 @@
       "gsProperty": "verifiable",
       "phase": "development",
       "hook": "post-run",
-      "check": "After every simulation run, verify: fee_income + price_income == total_pnl +/- 1%. This is a Category A silent loss bug check. If the decomposition fails, accounting components are unlinked and the strategy is earning zero while appearing to run normally. Extend to all components present in the strategy's accounting model. The check must name the exact fields it is comparing and report the delta on failure.\n",
-      "passCriterion": "|fee_income + price_income - total_pnl| / |total_pnl| < 0.01. Fails immediately with named components and delta if violated.\n",
+      "check": "After every simulation run, verify: fee_income + price_income + borrowing_cost == total_pnl +/- 1%. This is a Category A silent loss bug check. If the decomposition fails, accounting components are unlinked and the strategy is earning zero while appearing to run normally. Extend to all components present in the strategy's accounting model. The check must name the exact fields it is comparing and report the delta on failure. Also flag runs where total_pnl > 0 but fee_income <= 0 (SIM-08: silent positive return bug — positive total PnL without any fee income indicates unaccounted income source or accounting bypass). borrowing_cost is a required decomposition component alongside fee_income and price_income (FIN-05): it must be present in every run output that involves AAVE debt, and its sign must be negative (it is a cost).\n",
+      "passCriterion": "|fee_income + price_income + borrowing_cost - total_pnl| / |total_pnl| < 0.01. Fails immediately with named components and delta if violated. borrowing_cost must be present and non-zero when debt > 0. Runs where total_pnl > 0 and fee_income <= 0 must be flagged as suspect and reviewed.\n",
       "tags": [
         "FINTECH",
         "SIMULATION"
@@ -28,6 +135,90 @@
       "approvedAt": "2026-03-01",
       "contributor": "jghiringhelli",
       "_path": "gates/fintech/pnl-decomposition.yaml"
+    },
+    {
+      "id": "private-key-log-prevention",
+      "title": "Private Key Log Prevention — No Private Keys in Logs or Exception Tracebacks",
+      "description": "Detect and block code that passes private key variables, mnemonics, or wallet secrets to logging functions, string formatting, or exception messages. Also verifies that .env files containing secrets are included in .gitignore. Prevents credential leakage through log aggregators, error tracking systems, or accidental commits.\n",
+      "category": "operational-security",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "OP-01: Pre-commit hook scans all files that import web3 or eth_account for patterns where secret-named variables are passed to output functions: (1) Logging calls with secret variable names\n    — pattern: `(log\\.|logger\\.|logging\\.)\\w+\\(.*\\b(private_key|pk|secret|mnemonic|seed_phrase)\\b`.\n(2) String formatting of secret variables\n    — pattern: `(str\\(|f\"|f'|\\.format\\().*\\b(private_key|pk|secret|mnemonic)\\b`.\n(3) Exception construction with secret variables\n    — pattern: `(raise|Exception|Error)\\(.*\\b(private_key|pk|secret|mnemonic)\\b`.\n(4) Print statements with secret variables\n    — pattern: `print\\(.*\\b(private_key|pk|secret|mnemonic)\\b`.\nAdditionally, verify that every .env file in the repository root and subdirectories is listed in .gitignore. A missing .gitignore entry for any .env file fails the hook. Report file, line number, and the matched pattern on failure.\n",
+      "passCriterion": "Zero occurrences of secret-named variables passed to log, print, str(), f-string, or exception constructors in files importing web3 or eth_account. All .env files present in the repository are covered by .gitignore entries.\n",
+      "tags": [
+        "FINTECH",
+        "WEB3"
+      ],
+      "generalizable": false,
+      "evidence": "An exception handler logged the full account object — including the private key field — to stdout using a generic str(account) call inside an except block. In a containerized deployment, stdout is captured by the log aggregator. The private key was present in Datadog logs for 3 weeks before it was discovered during an unrelated audit. The account had to be rotated and all associated positions transferred. A pre-commit scan for str(.*private and logger patterns would have caught the line before it was ever committed.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/private-key-log-prevention.yaml"
+    },
+    {
+      "id": "simulation-engine-health",
+      "title": "Simulation Engine Health — Error State, Capital Floor, and Activity Check",
+      "description": "After every simulation run, verify that the engine spent the majority of time in productive states, maintained minimum capital throughout, and produced enough state transitions to confirm genuine activity. Catches engines that silently stall, loop in recovery, or lose all capital while reporting a completed run.\n",
+      "category": "simulation-integrity",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "post-run",
+      "check": "After every simulation run, assert all three conditions: (1) SIM-02: fraction of ticks spent in ERROR or RECOVERY state must be < 10% of total simulation ticks. Report exact percentage and tick counts on failure. (2) SIM-03: engine capital must never drop below 10% of starting capital at any recorded snapshot. Report the minimum capital observed and the timestamp. (3) SIM-07: for a full-year simulation run (>= 8,000 hours), total state transitions logged by the engine must exceed 100. A run with fewer transitions indicates the state machine was frozen or bypassed. Report exact transition count on failure. All three checks are mandatory — a run that passes two and fails one is a failed run.\n",
+      "passCriterion": "Error/recovery state fraction < 10% of total ticks. Minimum capital >= 10% of starting capital at all snapshots. State transition count > 100 for full-year runs. All three conditions must pass; partial pass is a failure.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Engine that spent 60% of simulation time in RECOVERY state emitted zero trades while appearing to complete successfully. No exception was raised; the run output was structurally valid. The capital floor check would have caught total-loss scenarios that silently passed as completed runs. The transition count check would have flagged the frozen state machine that never left RECOVERY on the first post-run validation.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/simulation-engine-health.yaml"
+    },
+    {
+      "id": "simulation-lp-fee-nonzero",
+      "title": "Simulation LP Fee Nonzero — Fee Income and In-Range Percentage Check",
+      "description": "After every simulation run with LP (liquidity provision) enabled, verify that fee_income is greater than zero and that the LP in-range percentage is reported and positive. Catches strategies that deploy LP out of range and silently earn nothing for the entire run duration.\n",
+      "category": "simulation-integrity",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "post-run",
+      "check": "After every simulation run where LP is enabled in the strategy config, assert: (1) SIM-01: fee_income > $0 for the full run. A completed run with LP enabled and zero fee income is a Category A bug indicator. Report total run hours and fee_income on failure. (2) SIM-06: LP in-range percentage must be present in run output and > 0%. A missing or zero in-range percentage means the LP position was never within the active price range and no fees were earnable at any point. Report in-range% and the LP range bounds (lower, upper) versus the price range observed during the run. Both checks must pass. A run with fee_income > 0 but missing in-range% still fails.\n",
+      "passCriterion": "fee_income > 0 for all runs with LP enabled. LP in-range percentage is present in run output and > 0%. Both conditions required; if LP is disabled in config, this gate is skipped.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Strategy ran a full year with LP enabled and reported $0 in fees. Root cause: a bootstrap bypass had deployed the LP position out of range from day 1. The LP existed on-chain but the price never crossed into the range, so zero fees accrued. The in-range percentage check would have caught this on the first post-run validation — in-range% was 0% for the entire 8,760-hour run, making the root cause immediately visible without manual inspection of the position bounds.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/simulation-lp-fee-nonzero.yaml"
+    },
+    {
+      "id": "state-direct-mutation-prevention",
+      "title": "State Direct Mutation Prevention — All Transitions Through engine.trigger()",
+      "description": "Detect and block direct assignments to the state field outside of the designated transition method. All state machine transitions must go through engine.trigger() or the equivalent _set_state() method so that transition guards, entry/exit hooks, and audit logging are always executed. Applies to any project using a state machine pattern, not only DeFi simulations.\n",
+      "category": "state-machine-correctness",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "SM-02: Pre-commit hook scans all Python/TypeScript files for direct assignment to the state field outside of the transition trigger method. Pattern to detect: `self\\.state\\s*=` (Python) or `this\\.state\\s*=` (TypeScript/JavaScript) appearing in any function other than trigger(), _set_state(), or __init__() / constructor(). The state field name is configurable in forgecraft.yaml (default: \"state\"). The list of permitted setter methods is configurable (default: [\"trigger\", \"_set_state\"]). All matches outside permitted methods must be reported with file, line number, and the surrounding function name. Zero tolerance — any match fails the hook. Also flag direct state assignments in test fixture setup: test files using `self.engine.state =` or `engine.state =` directly are masking the same bug class and must use a test-safe setter or a factory that produces an engine in the desired state.\n",
+      "passCriterion": "Zero occurrences of direct state field assignment outside permitted setter methods in source files. Zero direct state assignments in test fixture setup code.\n",
+      "tags": [
+        "FINTECH",
+        "STATE-MACHINE"
+      ],
+      "generalizable": true,
+      "evidence": "Direct state assignment in test fixture setup bypassed all transition guards. The engine entered RUNNING state without any position deployed because the test set self.state = \"RUNNING\" directly, skipping the guard that verifies LP + debt + short are all present. All guard conditions in the TRANSITIONS config were skipped. The bug passed all unit tests because the tests used the same anti-pattern in setup — direct state assignment in fixtures masked the broken guard by never invoking it. The fix required both removing the direct assignment from source and replacing direct assignment in all test fixtures with proper factory methods.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/state-direct-mutation-prevention.yaml"
     },
     {
       "id": "vol-unit-confusion",
@@ -49,6 +240,27 @@
       "approvedAt": "2026-03-01",
       "contributor": "jghiringhelli",
       "_path": "gates/fintech/vol-unit-confusion.yaml"
+    },
+    {
+      "id": "walk-forward-validation",
+      "title": "Walk-Forward Validation — Parameter Generalization Across Time Windows",
+      "description": "Before releasing optimized strategy parameters, verify that they generalize across at least three non-overlapping time windows. Catches parameters that are overfit to a specific market regime and will fail catastrophically when that regime ends.\n",
+      "category": "simulation-integrity",
+      "gsProperty": "verifiable",
+      "phase": "pre-release",
+      "hook": "pre-release",
+      "check": "SIM-10: Before accepting any optimized parameter set as a release candidate, run the strategy with those parameters across at least 3 non-overlapping historical time windows of equal length. Windows must collectively cover distinct market regimes (trending, sideways, volatile). For each window, record: total_pnl, max_drawdown, sharpe_ratio, and liquidation_count. A parameter set passes only if: - It produces positive total_pnl in at least 2 of 3 windows. - It produces zero liquidations in all 3 windows. - The worst-window Sharpe is >= -0.5 (strategy does not catastrophically fail). Report per-window results in the release artifact. Optimizer journals must record the walk-forward result alongside the optimization score.\n",
+      "passCriterion": "Positive total_pnl in >= 2 of 3 non-overlapping time windows. Zero liquidations across all 3 windows. Worst-window Sharpe >= -0.5. Per-window results recorded in release artifact.\n",
+      "tags": [
+        "FINTECH",
+        "SIMULATION"
+      ],
+      "generalizable": false,
+      "evidence": "Optimizer tuned parameters to a 1-year bull market period. The parameter set achieved exceptional Sharpe and drawdown metrics on the training window. When deployed into a sideways market, the strategy catastrophically failed — parameters sized positions assuming sustained directional movement that never materialized. Walk-forward validation across 3 windows (bull, sideways, bear) would have shown a 2/3 failure rate and zero liquidations only in the bull window, blocking release before deployment.\n",
+      "status": "approved",
+      "approvedAt": "2026-03-19",
+      "contributor": "jghiringhelli",
+      "_path": "gates/fintech/walk-forward-validation.yaml"
     },
     {
       "id": "dependency-audit",

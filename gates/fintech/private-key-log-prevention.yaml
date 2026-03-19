@@ -1,0 +1,41 @@
+id: private-key-log-prevention
+title: "Private Key Log Prevention — No Private Keys in Logs or Exception Tracebacks"
+description: >
+  Detect and block code that passes private key variables, mnemonics, or wallet secrets
+  to logging functions, string formatting, or exception messages. Also verifies that
+  .env files containing secrets are included in .gitignore. Prevents credential leakage
+  through log aggregators, error tracking systems, or accidental commits.
+category: operational-security
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  OP-01: Pre-commit hook scans all files that import web3 or eth_account for patterns
+  where secret-named variables are passed to output functions:
+  (1) Logging calls with secret variable names
+      — pattern: `(log\.|logger\.|logging\.)\w+\(.*\b(private_key|pk|secret|mnemonic|seed_phrase)\b`.
+  (2) String formatting of secret variables
+      — pattern: `(str\(|f"|f'|\.format\().*\b(private_key|pk|secret|mnemonic)\b`.
+  (3) Exception construction with secret variables
+      — pattern: `(raise|Exception|Error)\(.*\b(private_key|pk|secret|mnemonic)\b`.
+  (4) Print statements with secret variables
+      — pattern: `print\(.*\b(private_key|pk|secret|mnemonic)\b`.
+  Additionally, verify that every .env file in the repository root and subdirectories
+  is listed in .gitignore. A missing .gitignore entry for any .env file fails the hook.
+  Report file, line number, and the matched pattern on failure.
+passCriterion: >
+  Zero occurrences of secret-named variables passed to log, print, str(), f-string,
+  or exception constructors in files importing web3 or eth_account.
+  All .env files present in the repository are covered by .gitignore entries.
+tags: [FINTECH, WEB3]
+generalizable: false
+evidence: >
+  An exception handler logged the full account object — including the private key field
+  — to stdout using a generic str(account) call inside an except block. In a containerized
+  deployment, stdout is captured by the log aggregator. The private key was present in
+  Datadog logs for 3 weeks before it was discovered during an unrelated audit. The account
+  had to be rotated and all associated positions transferred. A pre-commit scan for
+  str(.*private and logger patterns would have caught the line before it was ever committed.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

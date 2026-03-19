@@ -1,0 +1,40 @@
+id: lp-range-entry-guard
+title: "LP Range Entry Guard — Valid Range at Position Creation and Fee/Width Correlation"
+description: >
+  At LP position creation time, assert that the current price is within the specified
+  range (lower < current_price < upper). Also verify that fee income correlates
+  positively with LP range width — a wider range that produces lower fees indicates
+  a broken fee model. Prevents the entire class of "out-of-range from day 1" bugs and
+  fee model inversion anomalies.
+category: financial-invariants
+gsProperty: defended
+phase: development
+hook: pre-commit
+check: >
+  FIN-06: At every LP position creation event (add_liquidity, mint, or equivalent),
+  assert: lower_tick_price < current_price < upper_tick_price. This is a runtime guard
+  executed at position creation time, not post-run. If violated, raise an exception and
+  log: lower_bound, upper_bound, current_price, and the tick at which the position was
+  created. The pre-commit hook verifies that any function that creates an LP position
+  contains this assertion or calls a validator that includes it.
+  FIN-10: In simulation output, verify that fee_income correlates positively with
+  LP range width (upper - lower). If a parameter sweep shows that wider ranges
+  consistently produce lower fee income than narrower ranges at the same price level,
+  the fee model has an inversion bug. Flag any result set where the Pearson correlation
+  between range_width and fee_income is < 0 across >= 5 parameter sweep entries.
+passCriterion: >
+  lower_tick_price < current_price < upper_tick_price asserted at every LP position creation.
+  Exception raised and run halted if violated.
+  No negative correlation between LP range width and fee income across parameter sweeps.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  LP deployed out of range immediately earned $0 fees for 800 hours. The entry guard
+  is a 2-line check at position creation time — the entire class of "out-of-range from
+  day 1" bugs is prevented by a single assertion that takes under a millisecond to
+  evaluate. The fee/width correlation check would have additionally caught a fee model
+  bug where the fee calculation used a fixed range width constant, causing wider ranges
+  to report proportionally less fee income despite identical in-range time.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"

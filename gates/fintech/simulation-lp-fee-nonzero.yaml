@@ -1,0 +1,37 @@
+id: simulation-lp-fee-nonzero
+title: "Simulation LP Fee Nonzero — Fee Income and In-Range Percentage Check"
+description: >
+  After every simulation run with LP (liquidity provision) enabled, verify that
+  fee_income is greater than zero and that the LP in-range percentage is reported
+  and positive. Catches strategies that deploy LP out of range and silently earn
+  nothing for the entire run duration.
+category: simulation-integrity
+gsProperty: verifiable
+phase: development
+hook: post-run
+check: >
+  After every simulation run where LP is enabled in the strategy config, assert:
+  (1) SIM-01: fee_income > $0 for the full run. A completed run with LP enabled and
+  zero fee income is a Category A bug indicator. Report total run hours and fee_income
+  on failure.
+  (2) SIM-06: LP in-range percentage must be present in run output and > 0%.
+  A missing or zero in-range percentage means the LP position was never within the
+  active price range and no fees were earnable at any point. Report in-range% and
+  the LP range bounds (lower, upper) versus the price range observed during the run.
+  Both checks must pass. A run with fee_income > 0 but missing in-range% still fails.
+passCriterion: >
+  fee_income > 0 for all runs with LP enabled.
+  LP in-range percentage is present in run output and > 0%.
+  Both conditions required; if LP is disabled in config, this gate is skipped.
+tags: [FINTECH, SIMULATION]
+generalizable: false
+evidence: >
+  Strategy ran a full year with LP enabled and reported $0 in fees. Root cause: a
+  bootstrap bypass had deployed the LP position out of range from day 1. The LP existed
+  on-chain but the price never crossed into the range, so zero fees accrued. The in-range
+  percentage check would have caught this on the first post-run validation — in-range% was
+  0% for the entire 8,760-hour run, making the root cause immediately visible without
+  manual inspection of the position bounds.
+status: approved
+approvedAt: "2026-03-19"
+contributor: "jghiringhelli"
