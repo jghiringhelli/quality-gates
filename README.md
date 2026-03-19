@@ -14,21 +14,29 @@ A quality gate is a **binary, executable check** that must pass before code can 
 
 ```
 gates/
-  universal/      ← applies to any tech stack
-  fintech/        ← financial simulation, DeFi, trading systems
-  quarantine/     ← proposed gates pending review
-index.json        ← generated, machine-readable catalog of all approved gates
+  universal/             ← applies to any tech stack
+  environment-hygiene/   ← dev environment consistency gates
+  code-quality/          ← structural code quality gates (duplicates, orphans)
+  fintech/               ← financial simulation, DeFi, trading systems
+  quarantine/            ← proposed gates pending review
+index.json               ← generated, machine-readable catalog of all approved gates
 ```
 
 ## Current Gates
 
-| ID | Category | Phase | Hook | Tags |
-|----|----------|-------|------|------|
+| ID | Domain / Category | Phase | Hook | Tags |
+|----|-------------------|-------|------|------|
 | `owasp-l1-static` | security | development | pre-commit | UNIVERSAL |
 | `mutation-testing` | test-quality | pre-release | pre-release | UNIVERSAL |
 | `dependency-audit` | security | development | pre-commit | UNIVERSAL |
 | `pnl-decomposition` | simulation-integrity | development | post-run | FINTECH, SIMULATION |
 | `vol-unit-confusion` | financial-invariants | development | pre-commit | FINTECH, SIMULATION |
+| `vscode-extension-deduplication` | environment-hygiene | development | pre-commit | UNIVERSAL |
+| `package-manager-check-before-install` | environment-hygiene | development | pre-commit | UNIVERSAL |
+| `docker-container-reuse` | environment-hygiene | development | pre-commit | UNIVERSAL |
+| `codeseeker-semantic-search-before-grep` | environment-hygiene | development | pre-commit | UNIVERSAL |
+| `codeseeker-duplicate-detection` | code-quality | pre-release | close-cycle | UNIVERSAL |
+| `codeseeker-orphan-detection` | code-quality | pre-release | close-cycle | UNIVERSAL |
 
 ## Contributing a Gate
 

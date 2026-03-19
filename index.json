@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-19T02:38:15.701Z",
+  "generatedAt": "2026-03-19T20:42:21.571Z",
   "version": "1",
-  "gateCount": 16,
+  "gateCount": 22,
   "tags": [
     "API",
     "FINTECH",
@@ -13,6 +13,222 @@
     "WEB3"
   ],
   "gates": [
+    {
+      "id": "codeseeker-duplicate-detection",
+      "title": "Semantic Duplicate Code Detection at End of Cycle",
+      "description": "At the end of each development cycle, run CodeSeeker's duplicate detection scan to identify semantically similar code blocks (similarity > 0.85). Consolidate duplicates into shared utilities before marking the cycle complete. Prevents the progressive accumulation of near-identical logic that diverges over time, making the codebase harder to maintain and test.\n",
+      "domain": "code-quality",
+      "implementation": "mcp",
+      "gsProperty": "composable",
+      "phase": "pre-release",
+      "hook": "close-cycle",
+      "os": "cross-platform",
+      "check": "At end of each development cycle (before close_cycle completes):\n1. Run CodeSeeker duplicate detection scan on the codebase\n2. Review results: any pair with semantic similarity > 0.85 is a candidate for deduplication\n3. For each duplicate pair:\n   - Confirm they solve the same problem (not just syntactically similar)\n   - Consolidate into a shared utility\n   - Update all call sites\n4. Commit the deduplication before marking cycle complete\n",
+      "passCriterion": "No semantically duplicate code blocks with similarity > 0.85 remain in the codebase.",
+      "failureMessage": "Semantically duplicate code detected. Consolidate before closing the cycle.",
+      "fixHint": "Use codeseeker_duplicates to identify pairs. Extract shared logic to a utility. Update call sites.",
+      "tools": [
+        {
+          "name": "codeseeker",
+          "purpose": "Finds semantically similar code blocks using vector embeddings and AST analysis",
+          "installCommand": "npx codeseeker install --vscode",
+          "category": "mcp",
+          "required": true
+        }
+      ],
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "medium",
+      "impact": "medium",
+      "confidence": "high",
+      "references": [
+        "https://github.com/jghiringhelli/codeseeker"
+      ],
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/code-quality/codeseeker-duplicate-detection.yaml"
+    },
+    {
+      "id": "codeseeker-orphan-detection",
+      "title": "Orphaned Code Detection at End of Cycle",
+      "description": "At the end of each development cycle, run CodeSeeker's orphan detection to find modules and functions with no incoming edges in the dependency graph. Remove confirmed dead exports rather than commenting them out. Keeps the codebase lean, reduces cognitive load on reviewers, and prevents stale code from accumulating across cycles.\n",
+      "domain": "code-quality",
+      "implementation": "mcp",
+      "gsProperty": "composable",
+      "phase": "pre-release",
+      "hook": "close-cycle",
+      "os": "cross-platform",
+      "check": "At end of each development cycle:\n1. Run CodeSeeker orphan detection (isolated subgraph scan)\n2. Review results: modules/functions with no incoming edges in the dependency graph\n3. For each orphaned code unit:\n   - Is it a dead export? Remove it.\n   - Is it test-only? Move to test files or mark clearly.\n   - Is it intentionally standalone? Document why in a comment.\n4. Delete orphaned code. Do not comment it out. Git has history.\n",
+      "passCriterion": "No isolated subgraphs in the dependency graph. All exported symbols have at least one call site.",
+      "failureMessage": "Orphaned code detected -- modules or functions with no callers found.",
+      "fixHint": "Use codeseeker_orphans to identify isolated code. Delete unused exports. Move test helpers to test files.",
+      "tools": [
+        {
+          "name": "codeseeker",
+          "purpose": "Finds isolated subgraphs (orphaned modules) in the dependency graph",
+          "installCommand": "npx codeseeker install --vscode",
+          "category": "mcp",
+          "required": true
+        }
+      ],
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "medium",
+      "impact": "low",
+      "confidence": "high",
+      "references": [
+        "https://github.com/jghiringhelli/codeseeker"
+      ],
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/code-quality/codeseeker-orphan-detection.yaml"
+    },
+    {
+      "id": "codeseeker-semantic-search-before-grep",
+      "title": "Use Semantic Search Before Grep",
+      "description": "When searching the codebase for existing utilities, patterns, or similar implementations, prefer CodeSeeker's semantic (vector + graph) search over literal grep. Grep misses conceptually identical code with different naming, leading to duplicate utilities and inflated dependency footprints. This gate enforces the habit of semantic-first search in sessions where CodeSeeker is available.\n",
+      "domain": "environment-hygiene",
+      "implementation": "mcp",
+      "gsProperty": "composable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "os": "cross-platform",
+      "check": "When searching the codebase for existing code, utilities, patterns, or similar implementations:\n1. If CodeSeeker MCP tool is available in the session: use codeseeker_search FIRST\n2. Only fall back to grep/glob for exact literal string matches that semantic search won't help with\n3. Before writing any new utility function: search semantically (\"find utility that does X\")\n4. Before adding a new dependency: search semantically (\"existing code that handles X\")\nThis prevents duplicate code proliferation in large codebases.\n",
+      "passCriterion": "CodeSeeker used for conceptual searches. grep reserved for exact string matches.",
+      "failureMessage": "grep used for conceptual search when CodeSeeker is available, risking missed existing utilities.",
+      "fixHint": "Add CodeSeeker MCP to .claude/settings.json. Use codeseeker_search for \"find code that does X\" queries.",
+      "tools": [
+        {
+          "name": "codeseeker",
+          "purpose": "Graph-powered semantic code search with duplicate and orphan detection",
+          "installCommand": "npx codeseeker install --vscode",
+          "category": "mcp",
+          "required": true
+        }
+      ],
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P2",
+      "likelihood": "high",
+      "impact": "low",
+      "confidence": "medium",
+      "references": [
+        "https://github.com/jghiringhelli/codeseeker"
+      ],
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/environment-hygiene/codeseeker-semantic-search-before-grep.yaml"
+    },
+    {
+      "id": "docker-container-reuse",
+      "title": "Reuse Dev Docker Containers -- No Duplicate Servers",
+      "description": "Before spinning up a new Docker container for a development database or service, check whether a container of that type already exists. If one does, create a new database or namespace inside it rather than running a second container. Prevents resource waste, port collisions, and environment drift caused by multiple parallel instances of the same service type.\n",
+      "domain": "environment-hygiene",
+      "implementation": "cli",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "os": "cross-platform",
+      "check": "Before spinning up a new Docker container for development databases or services:\n1. Run: docker ps -a --format \"{{.Names}}\\t{{.Status}}\\t{{.Image}}\"\n2. Check if a container for this service type (postgres, redis, mongo, etc.) already exists\n3. If exists and running: create a new database/namespace WITHIN the existing container\n   - PostgreSQL: CREATE DATABASE {project}_dev within existing postgres container\n   - Redis: use a different DB index (SELECT 1, SELECT 2, etc.) per project\n   - MongoDB: create a new database within existing mongod\n4. If exists but stopped: docker start {container_name}\n5. Only create a new container if no existing container of this type exists\n6. All dev containers should connect to a shared 'forgecraft-dev' Docker network\n7. Document the shared container name and project-specific DB/namespace in docs/dev-environment.md\n",
+      "passCriterion": "No duplicate database/service containers running for development. Projects share containers, separate by database/namespace.",
+      "failureMessage": "New Docker container created when existing container of same type already running.",
+      "fixHint": "Use `docker ps -a` to find existing containers. Create a new database within the existing container instead of a new container.",
+      "tools": [
+        {
+          "name": "docker",
+          "purpose": "Container runtime",
+          "installCommand": "https://docs.docker.com/get-docker/",
+          "category": "binary",
+          "required": true
+        }
+      ],
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "medium",
+      "impact": "medium",
+      "confidence": "medium",
+      "references": [
+        "https://docs.docker.com/engine/reference/commandline/ps/"
+      ],
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/environment-hygiene/docker-container-reuse.yaml"
+    },
+    {
+      "id": "package-manager-check-before-install",
+      "title": "Check Before Install -- All Package Managers",
+      "description": "Before installing any package with any package manager, verify it is not already installed or declared. Prevents version conflicts, duplicate entries in manifests, and unnecessary network calls. Applies to npm, pip, brew, choco, apt, go get, and any other package manager in use on the project.\n",
+      "domain": "environment-hygiene",
+      "implementation": "process",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "os": "cross-platform",
+      "check": "Before installing any package with any package manager (npm, pip, brew, choco, apt, go get):\n1. Check if the package is already installed/declared:\n   - npm local: check package.json dependencies\n   - npm global: npm list -g {pkg}\n   - pip: pip list | grep {pkg} OR check pyproject.toml/requirements.txt\n   - brew: brew list --versions {pkg}\n   - choco: choco list --local-only {pkg}\n   - apt: dpkg -l {pkg}\n   - go: check go.mod for module\n2. Semver check:\n   - Same major, older minor/patch: update (upgrade command) or skip\n   - Same major, same or newer: skip entirely\n   - Different major: only proceed if project explicitly requires this major version (documented)\n3. Before adding any new runtime dependency: search semantically for existing packages/utilities\n   that already cover the use case (use codeseeker if available, or grep).\n",
+      "passCriterion": "No package is installed without first checking if it already exists. No duplicate major versions unless explicitly justified.",
+      "failureMessage": "Package installed without checking existing installations, or duplicate versions detected.",
+      "fixHint": "Always check before installing. For npm: check package.json. For others: run the list command for that package manager first.",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "high",
+      "impact": "low",
+      "confidence": "high",
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/environment-hygiene/package-manager-check-before-install.yaml"
+    },
+    {
+      "id": "vscode-extension-deduplication",
+      "title": "VS Code Extension Version Hygiene",
+      "description": "Before installing any VS Code extension, check the already-installed list to prevent duplicate major versions and unnecessary re-installs. Keeps the development environment deterministic and avoids conflicting extension behaviour caused by co-existing major versions of the same tool.\n",
+      "domain": "environment-hygiene",
+      "implementation": "cli",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "os": "cross-platform",
+      "check": "Before installing any VS Code extension:\n1. Run: code --list-extensions --show-versions\n2. Parse output as {id}@{semver} map\n3. For each extension to install:\n   a. Same ID, same major version exists → update (code --install-extension {id}) or skip if already latest minor\n   b. Same ID, different major version → only install if .vscode/extensions.json documents the version requirement with a rationale comment\n   c. Multiple copies at same major → deduplicate: keep highest minor, uninstall older ones\n4. Never run code --install-extension without first checking installed list\n",
+      "passCriterion": "No duplicate extension installs exist at the same major version. All installs were checked against existing list first.",
+      "failureMessage": "Duplicate VS Code extensions detected or extensions installed without checking existing list.",
+      "fixHint": "Run `code --list-extensions --show-versions`, remove duplicates with `code --uninstall-extension {id}@{old-version}`, keep highest minor per major.",
+      "tools": [
+        {
+          "name": "vscode-cli",
+          "purpose": "List and manage installed VS Code extensions",
+          "installCommand": "Bundled with VS Code installation",
+          "category": "cli",
+          "required": true
+        }
+      ],
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "high",
+      "impact": "low",
+      "confidence": "high",
+      "references": [
+        "https://code.visualstudio.com/docs/editor/extension-marketplace"
+      ],
+      "status": "ready",
+      "source": "registry",
+      "addedAt": "2026-03-19T20:00:00Z",
+      "_path": "gates/environment-hygiene/vscode-extension-deduplication.yaml"
+    },
     {
       "id": "aave-health-factor-floor",
       "title": "AAVE Health Factor Floor — Liquidation Risk and Borrowing Rate Invariants",
