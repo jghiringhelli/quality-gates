@@ -12,7 +12,7 @@ This document defines the full YAML schema for quality gates in the `genspec-dev
 | `title` | `string` | Human-readable title. Format: `"<What> — <Why>"` |
 | `description` | `string` | One paragraph: what does this gate check and why does it matter? |
 | `category` | `string` | One of: `security`, `test-quality`, `simulation-integrity`, `financial-invariants`, `observability`, `data-integrity` |
-| `gsProperty` | `string` | Which GS property this gate defends or verifies. One of: `defended`, `verifiable`, `auditable` |
+| `gsProperty` | `string` | Which GS property this gate defends or verifies. One of: `traceable`, `verifiable`, `auditable`, `defended`, `composable`, `bounded`, `executable` |
 | `phase` | `string` | Lifecycle phase. One of: `development`, `pre-release`, `rc`, `deployment`, `continuous` |
 | `hook` | `string` | Where the gate runs. One of: `pre-commit`, `pre-push`, `pre-release`, `post-run`, `scheduled`, `on-deploy` |
 | `check` | `string` | Executable step-by-step description of what to run. Must be deterministic and unambiguous. |
@@ -27,11 +27,21 @@ This document defines the full YAML schema for quality gates in the `genspec-dev
 | `tags` | `string[]` | Audience tags. Valid values: `UNIVERSAL`, `FINTECH`, `SIMULATION`, `API`, `CLI`, `LIBRARY` |
 | `generalizable` | `boolean` | Whether this gate applies across tech stacks without modification. Default: `false` |
 | `owasp_asvs_level` | `integer` | OWASP ASVS level (1–3) if the gate maps to ASVS. |
+| `provenance` | `object` | Structured experiment provenance. Use when the gate was derived from an experiment run, not engineering judgment. See fields below. |
 | `approvedAt` | `string` | ISO 8601 date when the gate was approved. Set automatically on graduation. |
 | `contributor` | `string` | GitHub username of the contributor. Omit or set to `"anonymous"` for anonymous contributions. |
 | `deprecatedAt` | `string` | ISO 8601 date when the gate was deprecated. |
 | `deprecationReason` | `string` | Why the gate was deprecated and what to use instead. |
 | `supersededBy` | `string` | Gate ID that replaces this gate. |
+
+### `provenance` object fields (all optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `experiment` | `string` | Experiment ID that discovered this gate (e.g. `ax-v6`, `ax-v7`). |
+| `finding` | `string` | One-sentence description of the specific failure that motivated this gate. |
+| `external_tool` | `string` | Name of the external tool that surfaced the finding (e.g. `SonarJS`, `Hurl`). |
+| `discovered_in` | `string` | Which condition/version the failure was found in. |
 
 ---
 
