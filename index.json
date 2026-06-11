@@ -1,20 +1,54 @@
 {
-  "generatedAt": "2026-03-27T22:57:34.396Z",
+  "generatedAt": "2026-06-11T22:02:40.772Z",
   "version": "1",
-  "gateCount": 29,
+  "gateCount": 59,
   "tags": [
     "API",
     "CLI",
+    "DATA-PIPELINE",
     "FINTECH",
+    "HEALTHCARE",
+    "HIPAA",
+    "INFRA",
     "LIBRARY",
+    "ML",
     "SIMULATION",
+    "SOC2",
     "STATE-MACHINE",
     "UNIVERSAL",
+    "WEB-NEXT",
     "WEB-REACT",
     "WEB-STATIC",
-    "WEB3"
+    "WEB3",
+    "anti-drift",
+    "branch-protection",
+    "cascade",
+    "documentation",
+    "governance",
+    "human-in-the-loop"
   ],
   "gates": [
+    {
+      "id": "react-accessibility-axe",
+      "title": "React Accessibility — axe-core Zero Violations",
+      "description": "Run axe-core automated accessibility scan on every rendered page in Playwright. Zero violations at the A and AA level are required before merge. This catches ARIA label gaps, color contrast failures, missing alt text, keyboard traps, and focus order problems — all of which are invisible to unit tests and only appear in a rendered page.\n",
+      "category": "accessibility",
+      "gsProperty": "verifiable",
+      "phase": "pre-release",
+      "hook": "pre-release",
+      "check": "Install @axe-core/playwright. In every Playwright test, after page.goto(), call:\n  import AxeBuilder from '@axe-core/playwright';\n  const results = await new AxeBuilder({ page }).analyze();\n  expect(results.violations).toEqual([]);\nConfigure axe with the project's color scheme — dark-mode backgrounds need explicit contrast ratios. Run against all authenticated and unauthenticated routes. Document any deliberate suppressions (e.g. third-party embeds) in axe.config.ts with owner and justification.\n",
+      "passCriterion": "Zero axe-core violations at A and AA level across all tested routes. Any suppressed violations are documented with owner and justification. axe scan runs in every Playwright CI job — not as a separate manual step.\n",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "React apps routinely ship with ARIA violations invisible during implementation: missing button labels, insufficient contrast in custom theme colors, focusable elements without visible focus indicator, missing landmark roles. axe-core catches these systematically. Cost: 3 lines per test file. Cost of not catching: WCAG compliance failures in production that require emergency remediations.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/accessibility/react-accessibility-axe.yaml"
+    },
     {
       "id": "api-error-envelope-resource-scoped",
       "title": "API Validation Errors — Resource-Scoped Keys Required",
@@ -118,6 +152,122 @@
       "approvedAt": "2026-03-27",
       "contributor": "jghiringhelli",
       "_path": "gates/api/node-esm-cjs-safe-imports.yaml"
+    },
+    {
+      "id": "findmany-deterministic-order",
+      "title": "Positional-Consumed Queries Require Explicit ORDER BY",
+      "description": "Any database query whose result is consumed by positional index — accessed as row[0], or zipped/bound to another array by position — must declare an explicit ORDER BY with a stable tie-breaker (e.g. a trailing id sort). Postgres and most engines do not guarantee heap-scan order; a test with two rows passes by coincidence, then production binds the wrong record.\n",
+      "category": "api-contracts",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Find findMany/SELECT calls whose results are indexed positionally or zipped to a sibling collection. 2. Confirm each declares orderBy / ORDER BY. 3. Prefer a tie-breaker: orderBy [{ field }, { id }] or { id }. 4. Flag positional consumers with no explicit order.\n",
+      "passCriterion": "Every query consumed by positional index has an explicit, tie-broken sort; result order does not depend on storage layout.\n",
+      "tags": [
+        "API"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-046 — findByDiagnosisId returned items in heap-scan order; the pipeline bound LLM-generated items to the wrong hypothesis by position. A two-row unit test passed; production ordering differed. An explicit orderBy fixes it permanently.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-046 — findMany without orderBy bound positional results to the wrong record in production",
+        "discovered_in": "GS field use (Vairix), gap G5"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/api-contracts/findmany-deterministic-order.yaml"
+    },
+    {
+      "id": "mutation-idempotency-declared",
+      "title": "POST/DELETE Endpoints Must Declare and Test Idempotency",
+      "description": "Every state-changing endpoint (POST create, DELETE) must declare its behavior under a repeated call and have a contract test that issues the call twice. A double click, a retry, or a network replay is normal; the endpoint must define whether the second call returns the same id (200/idempotent), conflicts (409), or no-ops (204) — and a test must pin it. Free-text create endpoints must also declare a fuzzy-duplicate policy.\n",
+      "category": "api-contracts",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Enumerate POST/DELETE endpoints. 2. For each, confirm an idempotency declaration (in spec or test header) and a contract test that calls it twice and asserts the declared behavior. 3. For free-text create endpoints, confirm a near-duplicate test. 4. Flag mutations with no double-call test.\n",
+      "passCriterion": "Every POST/DELETE declares its repeat-call behavior and has a test issuing the call twice that asserts it.\n",
+      "tags": [
+        "API"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-048 — startOrgDiagnosis rejected the second (idempotent) click; no test issued the call twice. Related DELTA-095 — survey-template create accepted semantically fuzzy duplicates (\"ship to production\" vs \"deploy to production\") because no test sent a near-duplicate. Mutation endpoints accept inputs the UI never exercises.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-048 — idempotent second call rejected; no two-call contract test",
+        "discovered_in": "GS field use (Vairix), gap G6"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/api-contracts/mutation-idempotency-declared.yaml"
+    },
+    {
+      "id": "nextjs-api-routes-covered",
+      "title": "Next.js API Routes — Hurl Contract Tests for Every /api/* Route",
+      "description": "Every Next.js API route (app/api/*/route.ts or pages/api/*.ts) must have a corresponding Hurl contract test covering: the happy path with correct response shape, an unauthorized request (missing/invalid auth token → 401/403), and at least one invalid input case (→ 400/422 with error envelope). API routes are server-side code isolated from the UI — Playwright cannot verify their contract in isolation. Uncovered routes are invisible to E2E tests.\n",
+      "category": "api-contracts",
+      "gsProperty": "verifiable",
+      "phase": "pre-release",
+      "hook": "pre-release",
+      "check": "1. Enumerate routes: find app/api -name \"route.ts\" && find pages/api -name \"*.ts\" 2. For each route, verify tests/api/<route-name>.hurl exists and covers:\n   a. Happy path: correct method, headers, body → assert response shape and status\n   b. Auth failure: missing/invalid Authorization header → HTTP 401 or 403\n   c. Validation failure: missing required field → HTTP 400/422 with error.message field\n3. Run: hurl --test tests/api/*.hurl --variable host=localhost --variable port=3000 4. All tests exit 0. Coverage check: count route files vs count hurl files — must be 1:1.\n",
+      "passCriterion": "Hurl test file exists for every API route (1:1 mapping enforced). All hurl tests pass against a running local dev server. Auth boundary (401/403) and validation boundary (400/422) covered per route. hurl --test exits 0.\n",
+      "tags": [
+        "WEB-NEXT",
+        "API"
+      ],
+      "generalizable": true,
+      "evidence": "Next.js projects with WEB-NEXT+API tags have server-side route logic that E2E tests cannot isolate. A Playwright test that clicks \"Submit\" cannot verify whether a 400 response from /api/submit returns the correct error envelope format. Hurl contract tests cover the server contract directly and orthogonally from the UI, making API behavior independently verifiable.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/api-contracts/nextjs-api-routes-covered.yaml"
+    },
+    {
+      "id": "spec-response-field-asserted",
+      "title": "Spec-Declared Response Fields Must Have Contract Assertions",
+      "description": "When an API spec declares that an endpoint returns a field, a contract test (Hurl or integration) must assert that field exists in the live response. The backend can drop a declared field silently — every unit test still passes because they assert on synthetic objects, not the wire response. The assertion need not check the value, only that the field was not dropped.\n",
+      "category": "api-contracts",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Parse the API spec for declared response fields per endpoint. 2. For each endpoint with a contract test, confirm a jsonpath/exists assertion for each declared field. 3. Flag declared fields with no corresponding assertion.\n",
+      "passCriterion": "Every field the spec declares in a response has a contract-test assertion that it exists; a backend that drops the field fails the contract suite.\n",
+      "tags": [
+        "API"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-057 and DELTA-082 — the spec declared latestDiagnosis on the projects listing; the backend dropped it; the dashboard hardcoded \"No diagnosis\". No test failed until a manual walkthrough weeks later. The same shape-drift appeared twice in different endpoints.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-057/082 — spec-declared response field dropped by backend, no contract test asserted its presence",
+        "discovered_in": "GS field use (Vairix), gap G4"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/api-contracts/spec-response-field-asserted.yaml"
+    },
+    {
+      "id": "nextjs-build-passes",
+      "title": "Next.js Build — next build Exits 0 with Zero Type Errors",
+      "description": "`next build` must complete successfully before any merge. This catches errors that `tsc --noEmit` alone cannot: server/client component boundary violations, invalid use-server / use-client directives, missing required metadata exports for App Router pages, and broken dynamic imports. A passing `next build` is the minimum viable proof that the application will run in production.\n",
+      "category": "build-correctness",
+      "gsProperty": "executable",
+      "phase": "pre-commit",
+      "hook": "pre-commit",
+      "check": "Add to CI and pre-push hook: `npx next build` (or `NODE_ENV=production next build`). Must exit 0. Common violations this catches:\n  - `\"use client\"` in a file that imports a server-only module\n  - Missing or incorrect `export const metadata` for App Router pages\n  - Dynamic import paths that don't exist\n  - Type errors in server actions (Route Handlers, Server Actions)\n  - Component using browser APIs (localStorage, window) without `\"use client\"`\nBoth `tsc --noEmit` AND `next build` are required — they catch different error classes.\n",
+      "passCriterion": "`npx next build` exits 0. Zero TypeScript errors in build output. All routes compile successfully. Build output shows no warnings promoted to errors.\n",
+      "tags": [
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "Next.js build errors are structurally distinct from TypeScript compiler errors: the App Router applies server/client boundary rules and RSC constraints that the TypeScript compiler alone cannot verify. Projects that pass `tsc --noEmit` regularly fail `next build` due to RSC boundary violations. Both checks are required in CI — running only one creates a false sense of correctness.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/build-correctness/nextjs-build-passes.yaml"
     },
     {
       "id": "codeseeker-duplicate-detection",
@@ -242,6 +392,27 @@
       "_path": "gates/code-quality/no-duplicate-string-literals.yaml"
     },
     {
+      "id": "react-no-direct-dom",
+      "title": "React — No Direct DOM Manipulation in Components",
+      "description": "Components must not use document.getElementById, document.querySelector, or other direct DOM API calls. All DOM interactions must go through React refs (useRef) or React state. Direct DOM manipulation bypasses React's reconciler, causing stale renders, hydration mismatches in SSR, and hard-to-reproduce bugs under concurrent mode.\n",
+      "category": "code-quality",
+      "gsProperty": "defended",
+      "phase": "pre-commit",
+      "hook": "pre-commit",
+      "check": "ESLint rule (add to .eslintrc):\n  \"no-restricted-globals\": [\"error\", \"document\", \"window\"]\nOr use the more targeted pattern in a pre-commit script:\n  grep -rn \"document\\.\\(getElementById\\|querySelector\\|querySelectorAll\\|createElement\\)\" src/\nBlock commit if matches found outside test files (*.test.*, *.spec.*). Exception: top-level _document.tsx (Next.js custom Document) is excluded. useRef is the approved pattern for DOM element access.\n",
+      "passCriterion": "Zero occurrences of direct DOM API calls in component files (src/**/*.tsx, src/**/*.jsx). ESLint rule or pre-commit hook enforces this automatically. Any documented exceptions have owner and justification in .eslintrc comments.\n",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "Direct DOM manipulation in React components is a reliable source of hydration errors in Next.js SSR, stale-closure bugs in React concurrent mode, and visual glitches on re-render. The pattern is eliminated structurally with a simple ESLint rule — no runtime cost, zero false positives in well-structured code.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/code-quality/react-no-direct-dom.yaml"
+    },
+    {
       "id": "sonarqube-quality-gate-ok",
       "title": "SonarQube Quality Gate — Independent Static Analysis Passes",
       "description": "Run SonarQube (or SonarCloud) static analysis and confirm the Quality Gate passes. SonarQube is an industry-standard quality tool with no knowledge of GS. A passing Quality Gate (A ratings across reliability, security, maintainability; 0 bugs, 0 vulnerabilities) from an independent tool closes Layer 3 of the GS circularity problem: GS-designed implementations scoring well on a non-GS quality model.\n",
@@ -266,6 +437,220 @@
       "approvedAt": "2026-03-27",
       "contributor": "jghiringhelli",
       "_path": "gates/code-quality/sonarqube-quality-gate-ok.yaml"
+    },
+    {
+      "id": "atomic-component-structure",
+      "title": "Atomic Component Structure — Placement Enforcement",
+      "description": "Enforce Atomic Design organization: all UI components in src/components/ must live in atoms/, molecules/, organisms/, templates/, or pages/ subdirectories. Flat component directories become unsearchable at scale and cause AI assistants to create duplicate components because no naming signal indicates whether a primitive already exists.\n",
+      "category": "component-architecture",
+      "gsProperty": "self-describing",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "tooled",
+      "os": "cross-platform",
+      "check": "Pre-commit hook scans staged .tsx/.jsx files under a components/ directory. Any file that is a direct child of components/ (not in atoms/, molecules/, organisms/, templates/, or pages/) fails the check and blocks the commit.\n",
+      "passCriterion": "All component files in components/ directories are organized inside atomic subdirectories. No flat root-level component files exist in any components/ directory.\n",
+      "failureMessage": "Component placed in flat components/ directory. Classify and move to the appropriate atomic subdirectory: atoms/, molecules/, organisms/, templates/, or pages/.\n",
+      "fixHint": "Move to src/components/{atoms|molecules|organisms|templates|pages}/",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "Flat component directories are the primary cause of \"component sprawl\" — AI assistants and developers create new components because the structure gives no signal about what already exists. Teams using enforced atomic design see 40-60% reduction in duplicate component creation and faster onboarding because new contributors can immediately understand the scope and reuse potential of any component.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/component-architecture/atomic-component-structure.yaml"
+    },
+    {
+      "id": "design-token-enforcement",
+      "title": "Design Token Enforcement — No Raw Color Literals",
+      "description": "Prevent raw hex (#abc123), rgb(), rgba(), and hsl() color values in component and style files. All colors must reference CSS custom properties from the project token file (tokens.css, variables.css, or theme.ts). This enforces visual consistency, enables theming, and prevents the \"dark mode break\" failure class where hardcoded colors ignore the active color scheme.\n",
+      "category": "design-system",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "tooled",
+      "os": "cross-platform",
+      "check": "A pre-commit hook scans staged .tsx, .jsx, .css, .scss, and .less files for raw hex color patterns (#[3-8 hex digits]) and rgb()/rgba()/hsl() calls. Lines in token definition files (files matching tokens., variables., or theme.) are excluded. Any match in a non-token file blocks the commit.\n",
+      "passCriterion": "Zero raw hex or rgb/hsl color literals in component or style files (excluding token definition files). All colors referenced via var(--color-token-name) or equivalent design token syntax (e.g., Tailwind theme values, CSS-in-JS theme tokens).\n",
+      "failureMessage": "Raw color literals found in component/style file. Replace with design token references: var(--color-*) for CSS custom properties, or theme.colors.* for CSS-in-JS.\n",
+      "fixHint": "Replace #hex and rgb() with var(--color-token-name) from src/styles/tokens.css",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT",
+        "WEB-STATIC"
+      ],
+      "generalizable": true,
+      "evidence": "Design systems fracture when raw hex values proliferate across components. Dark mode implementations break because #1a2b3c ignores prefers-color-scheme. Brand refreshes require grep-and-replace across hundreds of files instead of a single token edit. Teams using design token enforcement report 10x faster brand update rollouts and zero dark-mode contrast failures post-launch.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/design-system/design-token-enforcement.yaml"
+    },
+    {
+      "id": "design-doc-required",
+      "title": "Design Doc Required Before Feature Work",
+      "description": "Verifies that a design document (PRD or feature spec) exists before feature implementation begins. Encourages design-first discipline: define the problem, explore alternatives, and document trade-offs before writing production code. Inspired by the \"office hours → plan review\" gate from gstack.\n",
+      "category": "documentation",
+      "gsProperty": "self-describing",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "cli",
+      "severity": "warning",
+      "check": "Confirm docs/PRD.md and docs/TechSpec.md exist before feature code is written. PRD must state problem, target users, use cases, non-goals, and alternatives considered; TechSpec must state architecture, key decisions, dependencies, and required environment variables. See checkSpec below for the per-document probes.\n",
+      "passCriterion": "Both docs/PRD.md and docs/TechSpec.md are present before feature implementation begins.\n",
+      "failureMessage": "Design docs missing — docs/PRD.md and/or docs/TechSpec.md not found before feature work. Document the problem and approach first.\n",
+      "fixHint": "Create docs/PRD.md and docs/TechSpec.md, then run forgecraft audit.",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "checkSpec": [
+        {
+          "id": "prd-exists",
+          "description": "docs/PRD.md must exist",
+          "fail_message": "docs/PRD.md not found. Before writing feature code, document:\n  - Problem statement (what user pain are you solving?)\n  - Target users and their context\n  - Use cases (one sentence each: \"[Actor] [action] so that [outcome]\")\n  - Non-goals (what this feature explicitly does not do)\n  - 2-3 alternatives considered and why this approach was chosen\nCreate docs/PRD.md, then run: npx forgecraft-mcp audit .\n",
+          "pass_message": "docs/PRD.md present",
+          "probe": {
+            "type": "file_exists",
+            "path": "docs/PRD.md"
+          }
+        },
+        {
+          "id": "techspec-exists",
+          "description": "docs/TechSpec.md must exist",
+          "fail_message": "docs/TechSpec.md not found. Before writing feature code, document:\n  - Architecture diagram (ASCII) showing layers and data flow\n  - Key design decisions and why (alternatives rejected)\n  - External dependencies and what they're used for\n  - Environment variables required\nCreate docs/TechSpec.md, then run: npx forgecraft-mcp audit .\n",
+          "pass_message": "docs/TechSpec.md present",
+          "probe": {
+            "type": "file_exists",
+            "path": "docs/TechSpec.md"
+          }
+        }
+      ],
+      "remediation": {
+        "steps": [
+          {
+            "title": "Create docs/PRD.md",
+            "prompt": "Read CLAUDE.md and any existing docs/.\n\nCreate docs/PRD.md with the following structure:\n- ## Problem Statement — what user pain are you solving?\n- ## Target Users — who uses this and in what context?\n- ## Use Cases — one per feature: \"[Actor] [action] so that [outcome]\"\n- ## Non-Goals — what this explicitly does not cover\n- ## Alternatives Considered — 2-3 options you evaluated and why you chose this approach\n\nDo NOT invent requirements. Document only what is known.\nCommit: docs(spec): add PRD for [feature name]\n"
+          },
+          {
+            "title": "Create docs/TechSpec.md",
+            "prompt": "Read CLAUDE.md, docs/PRD.md, and any existing architecture docs.\n\nCreate docs/TechSpec.md with the following structure:\n- ## Stack — detected from package.json / pyproject.toml\n- ## Architecture Diagram — ASCII showing layers and data flow\n- ## Key Design Decisions — what you chose and why\n- ## External Dependencies — what each dep does\n- ## Environment Variables — from .env.example\n- ## Testing Strategy — unit, integration, mutation targets\n\nCommit: docs(spec): add TechSpec for [feature name]\n"
+          }
+        ]
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/documentation/design-doc-required.yaml"
+    },
+    {
+      "id": "doc-cascade-required",
+      "title": "Documentation Cascade Required for Code Changes",
+      "description": "Code changes must propagate to documentation in a structured cascade: feat → spec touched (and ideally use-case + schema); fix → regression test added (decision optional). This is the GS anti-drift requirement: the spec is the source of truth, and code/tests are derivations from it. Running this gate enforces the docs/manifest.yaml cascade rules.\n",
+      "category": "documentation",
+      "gsProperty": "auditable",
+      "phase": "development",
+      "hook": "commit-msg",
+      "priority": "P1",
+      "check": "Match the conventional-commit type against the docs/manifest.yaml cascade rules (checkSpec below). A feat: must touch a spec; a fix: must include a regression test. Refactor/perf encourage a decision record or ADR.\n",
+      "passCriterion": "The staged change satisfies the cascade rule for its conventional-commit type (feat → spec touched; fix → regression test staged).\n",
+      "checkSpec": {
+        "type": "cascade_compliance",
+        "manifest": "docs/manifest.yaml",
+        "fallback": "templates/docs-manifest.yaml",
+        "rules": {
+          "feat": {
+            "requires_one_of": [
+              "documents.specs.path",
+              "documents.specs.legacy_files"
+            ],
+            "encourages": [
+              "documents.use_cases.path",
+              "documents.schemas.path"
+            ]
+          },
+          "fix": {
+            "requires_one_of": [
+              "tests"
+            ],
+            "encourages": [
+              "documents.decisions.path"
+            ]
+          },
+          "refactor": {
+            "encourages": [
+              "documents.adrs.active_path",
+              "documents.decisions.path"
+            ]
+          },
+          "perf": {
+            "encourages": [
+              "documents.decisions.path",
+              "documents.schemas.path"
+            ]
+          }
+        }
+      },
+      "failureMessage": "Conventional-commit type does not match the docs/code cascade. A `feat:` change must touch a spec; a `fix:` change must include a regression test. Without this, documentation drifts away from implementation and the GS spec → code derivation is broken.\n",
+      "fixHint": "Read docs/manifest.yaml. For feat: add or update a doc in docs/specs/. For fix: stage a regression test in tests/. For refactor making an architectural choice: add docs/adrs/active/ADR-NNNN-slug.md. Severity is configurable per commit type via cascade_overrides.<type>.severity (info | warning | error) in docs/manifest.yaml — start at warning during legacy migration, bump to error once the project's baseline is clean.\n",
+      "evidence": "Documentation drift is the dominant failure mode for AI-assisted teams. When the AI changes code without updating docs, the spec stops being the source of truth and becomes lagging documentation. The cascade rule, enforced at commit-msg + CI, makes drift a build failure rather than a silent erosion.\n",
+      "generalizable": true,
+      "tags": [
+        "documentation",
+        "anti-drift",
+        "cascade"
+      ],
+      "layers": [
+        {
+          "layer": "L1",
+          "description": "Blueprint completeness: every code change carries a contract about whether docs need updating, declared by the conventional-commit type.\n",
+          "when": "Fire when src/ files are staged or in a PR diff and the manifest cascade for that commit type is not satisfied.\n"
+        }
+      ],
+      "convergence": {
+        "prescriptive": true,
+        "agnostic": true,
+        "healthy": true,
+        "deterministic": true,
+        "convergent": true
+      },
+      "likelihood": "high",
+      "impact": "high",
+      "confidence": "high",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/documentation/doc-cascade-required.yaml"
+    },
+    {
+      "id": "cae-version-parity",
+      "title": "CAE Version Parity with PRD",
+      "description": "The Customer Acceptance Environment (class: cae) must run the same version as production (class: prd) with minimal delay between deployments. CAE exists for customers to test their integrations against our API surface — if CAE lags behind PRD, customers may test against a version that no longer reflects production behavior, invalidating their acceptance testing.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "executable",
+      "phase": "deployment",
+      "hook": "release",
+      "implementation": "cli",
+      "check": "When both a cae and a prd environment are declared in forgecraft.yaml with health check URLs, compare the version field from each health endpoint: - GET {prd.url}{prd.health ?? '/health'} → extract .version or X-App-Version header - GET {cae.url}{cae.health ?? '/health'} → extract .version or X-App-Version header Assert both versions match exactly (semver equality). This check runs as a post-deploy gate, not pre-commit.\n",
+      "passCriterion": "CAE health endpoint reports the same version as PRD health endpoint. Both endpoints respond within 5 seconds.\n",
+      "failureMessage": "CAE is running a different version than PRD. Customers testing integrations against CAE may encounter API behavior that differs from production. Deploy the same version to CAE before declaring the release complete.\n",
+      "fixHint": "Run your CAE deployment pipeline with the same artifact/tag as the PRD deployment. CAE should be the last step of the PRD deploy pipeline.\n",
+      "tags": [
+        "INFRA",
+        "API"
+      ],
+      "priority": "P1",
+      "likelihood": "medium",
+      "impact": "high",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "A payment platform deployed a breaking change in the webhook signature algorithm to PRD but not CAE. A partner spent two days debugging their integration against CAE before discovering the environment mismatch. Version parity verification would have surfaced this immediately.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/cae-version-parity.yaml"
     },
     {
       "id": "codeseeker-semantic-search-before-grep",
@@ -344,6 +729,128 @@
       "_path": "gates/environment-hygiene/docker-container-reuse.yaml"
     },
     {
+      "id": "lte-anonymized-data",
+      "title": "LTE Seed Data — No Real PII Patterns",
+      "description": "Load test environments must use anonymized, synthetic data — never real production data. Seed files and fixtures for LTE environments must not contain real email addresses from known corporate domains, phone number patterns, or social security number / national ID patterns.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "defended",
+      "phase": "pre-release",
+      "hook": "pre-push",
+      "implementation": "tooled",
+      "check": "Scan seed files, fixture files, and data migration scripts for: - Real-looking email addresses (pattern: [a-z]+@[company-domain]) where\n  company domain is not a known test domain (example.com, test.com, fake.com)\n- Phone number patterns: \\b\\d{3}[-.\\s]\\d{3}[-.\\s]\\d{4}\\b - SSN-like patterns: \\b\\d{3}-\\d{2}-\\d{4}\\b Scan paths: seed/, fixtures/, data/, prisma/seed*, scripts/seed*\n",
+      "passCriterion": "Zero matches for real PII patterns in seed and fixture files. All email addresses use @example.com, @test.com, or clearly synthetic domains.\n",
+      "failureMessage": "Potential real PII found in seed/fixture files intended for the LTE environment. Replace with synthetic data using a tool like faker.js or Mockaroo.\n",
+      "fixHint": "Replace real-looking data with faker-generated synthetic equivalents.",
+      "tools": [
+        {
+          "name": "grep",
+          "purpose": "Pattern scan for PII in seed files",
+          "category": "cli",
+          "required": true
+        }
+      ],
+      "tags": [
+        "INFRA",
+        "HIPAA",
+        "SOC2"
+      ],
+      "priority": "P0",
+      "likelihood": "medium",
+      "impact": "high",
+      "confidence": "medium",
+      "generalizable": true,
+      "evidence": "A production database snapshot was used to seed a load test environment without anonymization. The LTE environment was accessible to the performance testing team who were contractors, resulting in a data breach notification.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/lte-anonymized-data.yaml"
+    },
+    {
+      "id": "lte-ephemeral-infra",
+      "title": "LTE Ephemeral Infrastructure — Teardown Script Required",
+      "description": "Load test environments (class: lte) must be ephemeral: created on demand and fully destroyed after test runs. A teardown script or IaC destroy target must exist to prevent LTE environments from persisting indefinitely and accruing unnecessary cost and security exposure.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "auditable",
+      "phase": "pre-release",
+      "hook": "pre-push",
+      "implementation": "logic",
+      "check": "When forgecraft.yaml declares any environment with class: lte or ephemeral: true, verify that at least one of the following exists in the project: - infra/teardown.sh or infra/teardown.ps1 - infra/destroy.sh - A Terraform/Pulumi destroy target (terraform destroy or pulumi destroy command\n  documented in Makefile, package.json scripts, or README under a \"teardown\" heading)\n- A Railway/Fly/Render delete command documented in the deployment runbook\n",
+      "passCriterion": "At least one of: infra/teardown.* exists, IaC destroy target is documented in scripts or README, or deployment runbook contains teardown instructions.\n",
+      "failureMessage": "LTE environment declared but no teardown script or IaC destroy target found. Ephemeral environments without teardown scripts become permanent and accrue cost.\n",
+      "fixHint": "Create infra/teardown.sh with your IaC destroy command.",
+      "tags": [
+        "INFRA"
+      ],
+      "priority": "P1",
+      "likelihood": "low",
+      "impact": "medium",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "Load test environments provisioned for a performance sprint were left running for weeks after the sprint ended because no automated teardown existed. The environments held anonymized production data and accrued significant cost.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/lte-ephemeral-infra.yaml"
+    },
+    {
+      "id": "no-cross-tier-urls",
+      "title": "No Cross-Tier URL Hardcoding",
+      "description": "Source code must not contain hardcoded hostnames or URLs from higher-tier environments (CAE, PRD) in lower-tier code (DEV, QAE, LTE). Cross-tier URL references bypass environment isolation and risk sending test traffic to production systems or leaking production URLs into non-prod logs.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "cli",
+      "check": "Grep source files for any hardcoded occurrences of URLs declared in forgecraft.yaml deployment.environments for class: cae or class: prd. Exclude config files (*.env, *.yaml, *.json in root) and test fixtures. Command: grep -r \"PROD_URL_PATTERN\\|CAE_URL_PATTERN\" src/ --include=\"*.ts\" --include=\"*.js\" --include=\"*.py\" where patterns are the url values from forgecraft.yaml for cae and prd environments.\n",
+      "passCriterion": "Zero matches for hardcoded CAE or PRD hostnames in source files under src/. Environment URLs referenced only via environment variables.\n",
+      "failureMessage": "Hardcoded CAE or PRD URL found in source code. Replace with an environment variable (e.g. process.env.API_URL) and configure per-environment in your deployment platform.\n",
+      "fixHint": "Replace hardcoded URL with process.env.API_URL or equivalent env var.",
+      "tags": [
+        "INFRA",
+        "API",
+        "UNIVERSAL"
+      ],
+      "priority": "P0",
+      "likelihood": "medium",
+      "impact": "high",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "A common incident pattern: developer hardcodes staging URL during debugging, commits it, and the code ships to production pointing at the wrong environment. Seen in payment gateway integrations where the test processor URL was hardcoded and deployed to production, causing all transactions to route to the sandbox.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/no-cross-tier-urls.yaml"
+    },
+    {
+      "id": "no-prod-relay-in-nonprod",
+      "title": "No Production Email/Message Relay in Non-Production Environments",
+      "description": "Non-production environments (dev, qae, lte) must not be configured to use the production email/SMS/notification relay. A test environment wired to the prod relay sends real messages to real users from test data — password resets, receipts, and alerts that should never have left the sandbox.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "cli",
+      "check": "For every environment whose class is not cae or prd, confirm the relay/SMTP configuration does not point at the production relay. Inspect forgecraft.yaml deployment.environments[*].smtpRelay and the environment's mail/notification config: a non-prod environment must use a test/sandbox relay (e.g. Mailpit, Mailtrap, a stub sink), never the production provider credentials.\n",
+      "passCriterion": "No environment with class dev/qae/lte resolves its email/message relay to the production provider. smtpRelay: prod appears only on cae/prd environments.\n",
+      "failureMessage": "A non-production environment is configured with the production email/message relay (smtpRelay: prod). Test traffic would send real messages to real users.\n",
+      "fixHint": "Point non-prod environments at a sandbox relay (Mailpit, Mailtrap, or a stub), and restrict the production relay credentials to cae/prd only.\n",
+      "tags": [
+        "INFRA",
+        "API",
+        "UNIVERSAL"
+      ],
+      "priority": "P0",
+      "likelihood": "medium",
+      "impact": "high",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "A classic incident: a staging environment left pointing at the production email provider blasts password-reset and billing emails to the real customer list during a test run. The blast radius is external and immediate, and the misconfiguration is invisible until messages land. This gate is the enforcement half of the smtpRelay activation rule in getEnvironmentActivatedGateIds, which previously referenced a gate id that did not exist in the registry.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/no-prod-relay-in-nonprod.yaml"
+    },
+    {
       "id": "package-manager-check-before-install",
       "title": "Check Before Install -- All Package Managers",
       "description": "Before installing any package with any package manager, verify it is not already installed or declared. Prevents version conflicts, duplicate entries in manifests, and unnecessary network calls. Applies to npm, pip, brew, choco, apt, go get, and any other package manager in use on the project.\n",
@@ -368,6 +875,34 @@
       "source": "registry",
       "addedAt": "2026-03-19T20:00:00Z",
       "_path": "gates/environment-hygiene/package-manager-check-before-install.yaml"
+    },
+    {
+      "id": "prd-change-control",
+      "title": "Production Change Control Document Required",
+      "description": "Changes deployed to production (class: prd) or any environment with underChangeControl: true must be accompanied by a change control document. Acceptable forms: an ADR in docs/adrs/, a CHANGELOG entry for the current version, a ticket reference in the commit message (e.g. JIRA-1234, #123), or an RFC document. This gate prevents undocumented production changes.\n",
+      "category": "environment-hygiene",
+      "gsProperty": "auditable",
+      "phase": "deployment",
+      "hook": "release",
+      "implementation": "logic",
+      "check": "Before deploying to a prd or underChangeControl: true environment, verify that at least ONE of the following is present: 1. A new ADR file in docs/adrs/ committed in this release branch/tag 2. A CHANGELOG.md entry matching the current version (from package.json/pyproject.toml) 3. A commit message in this release containing a ticket reference pattern:\n   [A-Z]+-\\d+ (Jira-style) or #\\d+ (GitHub issue reference)\n4. An RFC or design doc committed in docs/ referencing this change\n",
+      "passCriterion": "At least one change control artifact exists: ADR, CHANGELOG entry, ticket reference in commit history, or RFC document.\n",
+      "failureMessage": "No change control document found for this production deployment. Add an ADR, update CHANGELOG.md, or include a ticket reference in your release commit message before deploying to production.\n",
+      "fixHint": "Add CHANGELOG.md entry for this version, or create docs/adrs/ADR-NNN-title.md describing the change. Alternatively, ensure your release commit references a ticket: \"feat: add X (PROJ-1234)\".\n",
+      "tags": [
+        "INFRA",
+        "UNIVERSAL"
+      ],
+      "priority": "P0",
+      "likelihood": "high",
+      "impact": "high",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "A critical authentication bypass was introduced in a late-night hotfix deployed directly to production without any change control record. Post-incident review could not determine who approved the change or what testing was done. Change control gates prevent this class of incident.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/environment-hygiene/prd-change-control.yaml"
     },
     {
       "id": "vscode-extension-deduplication",
@@ -660,6 +1195,351 @@
       "_path": "gates/fintech/walk-forward-validation.yaml"
     },
     {
+      "id": "human-judgment-required",
+      "title": "Human Judgment Required Before Merge to Protected Branches",
+      "description": "No untested or unreviewed code reaches protected branches. Even when AI agents produce a clean diff, a human must explicitly review and approve before merge. This is the GS judgment-layer requirement: AI accelerates production, humans ratify direction. Without this gate, AI-generated code can flow to prod with no judgment checkpoint — the dominant new failure mode in 2025-2026 teams.\n",
+      "category": "governance",
+      "gsProperty": "defended",
+      "phase": "integration",
+      "hook": "pre-push",
+      "priority": "P0",
+      "check": "Verify protected-branch governance (checkSpec below): tests pass, at least one non-author human has reviewed/approved, and the PR is not an AI-only merge. Enforced jointly with GitHub branch protection.\n",
+      "passCriterion": "PR to a protected branch has passing checks and at least one non-author human approval; AI-only merges are blocked.\n",
+      "checkSpec": {
+        "type": "pr_governance",
+        "manifest": "docs/manifest.yaml",
+        "rules": {
+          "protected_branches": [
+            "main",
+            "develop"
+          ],
+          "require_review": true,
+          "min_reviewers": 1,
+          "require_tests_pass": true,
+          "require_human_ack": true,
+          "block_ai_only_merge": true
+        }
+      },
+      "failureMessage": "PR cannot merge: human judgment requirements not satisfied. Either tests are failing, no human reviewer has approved, or the only interactions on the PR are from the author. Protected branches enforce a human checkpoint regardless of how clean the AI-produced diff looks.\n",
+      "fixHint": "Wait for a human reviewer to approve the PR. If you are the sole maintainer, set human_judgment_overrides.min_reviewers to 0 in docs/manifest.yaml (solo mode); branch protection still requires PR + checks. For team mode, ensure CODEOWNERS or branch protection routes the PR to at least one human reviewer.\n",
+      "evidence": "Branch protection enforces this at the GitHub layer; this gate documents and validates the contract at the manifest layer. Together they form a redundant \"human-in-the-loop\" requirement that the AI cannot route around — the AI cannot create approvals on its own PRs, and the protected branch refuses merge without them.\n",
+      "generalizable": true,
+      "tags": [
+        "governance",
+        "human-in-the-loop",
+        "branch-protection"
+      ],
+      "layers": [
+        {
+          "layer": "L1",
+          "description": "Governance layer: even a perfect implementation must pass through human ratification before reaching shared/production state.\n"
+        }
+      ],
+      "convergence": {
+        "prescriptive": true,
+        "agnostic": true,
+        "healthy": true,
+        "deterministic": true,
+        "convergent": true
+      },
+      "likelihood": "high",
+      "impact": "critical",
+      "confidence": "high",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/governance/human-judgment-required.yaml"
+    },
+    {
+      "id": "nextjs-bundle-size-budget",
+      "title": "Next.js — First-Load JS Bundle ≤ 200kB per Page",
+      "description": "The first-load JavaScript bundle for any page must not exceed 200kB (gzipped). This covers shared chunks + page-specific chunks shown in `next build` output. Exceeding this threshold reliably degrades Time-to-Interactive on mobile networks and LCP on slow connections — both Core Web Vitals that affect SEO ranking and user experience on low-end devices.\n",
+      "category": "performance",
+      "gsProperty": "verifiable",
+      "phase": "pre-release",
+      "hook": "pre-release",
+      "check": "1. Run `next build` and check the \"First Load JS\" column — any page exceeding 200kB is a violation. 2. For automated CI enforcement: add to package.json:\n     \"size-limit\": [{ \"limit\": \"200 kB\", \"path\": \".next/static/chunks/pages/**/*.js\" }]\n   Run: npx size-limit (exits 1 on violation).\n3. To investigate: ANALYZE=true next build (requires @next/bundle-analyzer). Common fixes for over-budget pages:\n  - Dynamic import for non-critical sections: next/dynamic with { ssr: false }\n  - Tree-shake icon libraries: import { IconName } from 'lib/Icon' not from 'lib'\n  - Code-split large optional components (date pickers, rich text editors, charts)\n",
+      "passCriterion": "Every route shows First Load JS ≤ 200kB in `next build` output. size-limit CI check exits 0 (when configured). Any route exceeding the budget has an approved exception in .forgecraft/gates/exceptions.json with owner, justification, and a remediation target date.\n",
+      "tags": [
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "200kB is the empirical threshold above which Time-to-Interactive degrades measurably on a 4G mobile connection (Google CrUX data). `next build` reports first-load JS per route, making this trivially automatable. The most common violation: importing a full component library (recharts, Three.js, TipTap) without dynamic import splitting. One `next/dynamic` call typically reduces the affected page from 400kB to under 100kB.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/performance/nextjs-bundle-size-budget.yaml"
+    },
+    {
+      "id": "nextjs-no-raw-img",
+      "title": "Next.js — Use next/image Instead of Raw <img> Tags",
+      "description": "All images must use the `<Image>` component from `next/image` rather than raw HTML `<img>` tags. next/image provides: automatic WebP/AVIF conversion, lazy loading, responsive srcset, CLS prevention via explicit width/height reservation, and CDN integration. Raw <img> bypasses all of these and reliably degrades Core Web Vitals — particularly Cumulative Layout Shift (CLS) and Largest Contentful Paint (LCP).\n",
+      "category": "performance",
+      "gsProperty": "verifiable",
+      "phase": "pre-commit",
+      "hook": "pre-commit",
+      "check": "ESLint rule (enabled by default with `extends: \"next/core-web-vitals\"`):\n  \"@next/next/no-img-element\": \"error\"\nPre-commit: `eslint src/**/*.tsx --rule '{\"@next/next/no-img-element\":\"error\"}'` exits 0. Exception: images inside markdown-rendered content (MDX) or third-party embeds are excluded when they come from untrusted user content — document in .eslintrc with `// eslint-disable-next-line @next/next/no-img-element` + reason comment.\n",
+      "passCriterion": "Zero `<img>` tags in Next.js component files outside documented exceptions. @next/next/no-img-element reports 0 violations in ESLint CI run. All documented exceptions have owner and justification.\n",
+      "tags": [
+        "WEB-NEXT"
+      ],
+      "generalizable": false,
+      "evidence": "Raw <img> tags in Next.js are the most reliable single cause of poor CLS scores (layout shift on image load) and missing WebP optimization. The next/image API is a drop-in replacement with identical usage. ESLint enforcement makes the rule invisible after initial adoption — it only fires when a developer writes a raw <img> tag, which is always a mistake in a Next.js project.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/performance/nextjs-no-raw-img.yaml"
+    },
+    {
+      "id": "responsive-strategy-adr",
+      "title": "Responsive Strategy ADR — Required Before Responsive Code",
+      "description": "An Architecture Decision Record (ADR) documenting the responsive strategy must exist in docs/adrs/active/ before any component using CSS media queries, Tailwind responsive prefixes (sm:, md:, lg:), or breakpoint variables is committed. Without a shared decision, each component author picks their own breakpoints, creating an inconsistent responsive experience across the application.\n",
+      "category": "responsive-design",
+      "gsProperty": "self-describing",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "tooled",
+      "os": "cross-platform",
+      "check": "When staged files contain @media queries, Tailwind responsive prefixes (sm:|md:|lg:|xl:), or a \"breakpoint\" identifier, verify that at least one .md file in docs/adrs/active/ contains the word \"responsive\" or \"breakpoint\". If not found, block the commit and direct the author to create the ADR from the template.\n",
+      "passCriterion": "An ADR covering responsive strategy exists in docs/adrs/active/ before any responsive layout code is committed. The ADR specifies: breakpoint values, mobile-first vs desktop-first approach, target viewport range, and the CSS framework/methodology.\n",
+      "failureMessage": "Responsive layout code added but no responsive strategy ADR found in docs/adrs/active/. Create docs/adrs/active/responsive-strategy.md before adding responsive code.\n",
+      "fixHint": "Create docs/adrs/active/responsive-strategy.md documenting breakpoints and approach",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT",
+        "WEB-STATIC"
+      ],
+      "generalizable": true,
+      "evidence": "Frontend projects without a defined responsive strategy accumulate breakpoint inconsistencies: one component breaks at 768px, another at 640px, a third at the Tailwind md: breakpoint (768px, but now a \"magic number\" rather than a decision). Mobile users hit layout issues only visible at exact viewport sizes. An ADR costs 30 minutes and prevents weeks of responsive bug triage.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/responsive-design/responsive-strategy-adr.yaml"
+    },
+    {
+      "id": "audit-log-on-pii-access",
+      "title": "Audit Log on PII Access for PII-Bearing Environments",
+      "description": "In any environment that can hold real personally identifiable information, read and write access to PII records must produce an audit-log entry capturing who accessed what and when. Without an access audit trail, a PII-bearing environment cannot answer the breach-investigation and compliance questions (SOC2 CC7, HIPAA §164.312(b)) that justify holding the data at all.\n",
+      "category": "security",
+      "gsProperty": "auditable",
+      "phase": "pre-release",
+      "hook": "pre-push",
+      "implementation": "cli",
+      "check": "Confirm that the data-access layer for PII entities emits an audit record on access. Verify an audit-log writer exists and is invoked from the repository/ service methods that read or mutate PII entities (the entities flagged in the data model / synthetic-data spec). The audit record must include actor identity, action, resource id, and timestamp. Absence of any audit-log writer in a containsPii environment fails the gate.\n",
+      "passCriterion": "PII read/write paths emit audit records (actor, action, resource, timestamp) to a durable audit sink, for every environment marked containsPii: true.\n",
+      "failureMessage": "Environment marked containsPii: true has no audit logging on PII access. Add an audit-log writer invoked from the PII data-access paths.\n",
+      "fixHint": "Add an append-only audit-log writer (actor, action, resourceId, timestamp) and call it from repository/service methods that read or mutate PII entities.\n",
+      "tags": [
+        "INFRA",
+        "API",
+        "HIPAA",
+        "SOC2",
+        "FINTECH",
+        "HEALTHCARE",
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "medium",
+      "impact": "high",
+      "confidence": "medium",
+      "generalizable": true,
+      "evidence": "Compliance regimes that permit holding PII (SOC2, HIPAA, PCI) require an access audit trail; its absence is a finding that blocks certification and cripples breach forensics. The control is invisible until an auditor or incident asks for it, so it is routinely deferred. This gate exists because the deployment schema advertised an \"audit logging gate\" for containsPii environments while no such gate was wired.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/security/audit-log-on-pii-access.yaml"
+    },
+    {
+      "id": "content-security-policy-set",
+      "title": "Content-Security-Policy Set on Externally-Accessible Services",
+      "description": "Any environment reachable from the public internet must serve a Content-Security-Policy (CSP) header that is not wide-open. A missing or `default-src *` / `unsafe-inline` CSP provides no XSS mitigation. The policy must at minimum constrain default-src and script-src to known origins.\n",
+      "category": "security",
+      "gsProperty": "defended",
+      "phase": "pre-release",
+      "hook": "pre-push",
+      "implementation": "cli",
+      "check": "Confirm a Content-Security-Policy response header exists and is restrictive on every environment declared externallyAccessible: true. Reject a policy that is absent, set to `default-src *`, or relies on `unsafe-inline`/`unsafe-eval` for script-src without a nonce/hash. Live check: curl -sI \"$API_URL\" | grep -i 'content-security-policy'\n",
+      "passCriterion": "A Content-Security-Policy header is present and constrains at least default-src and script-src to explicit origins (no bare wildcard, no unguarded unsafe-inline) for every externally-accessible environment.\n",
+      "failureMessage": "Externally-accessible environment has no Content-Security-Policy, or a policy permissive enough to provide no XSS protection (wildcard default-src or unguarded unsafe-inline).\n",
+      "fixHint": "Set a restrictive CSP via middleware (helmet contentSecurityPolicy) or proxy. Start from default-src 'self' and widen deliberately per asset origin.\n",
+      "tags": [
+        "INFRA",
+        "API",
+        "WEB-REACT",
+        "WEB-NEXT",
+        "UNIVERSAL"
+      ],
+      "priority": "P1",
+      "likelihood": "high",
+      "impact": "high",
+      "confidence": "medium",
+      "generalizable": true,
+      "evidence": "CSP is the most effective defense-in-depth control against reflected and stored XSS, but is frequently shipped either absent or as an ineffective wildcard because a permissive policy \"works\" in the browser without warning. This gate exists because the deployment schema advertised a \"CSP gate\" for externallyAccessible environments while no such gate was wired.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/security/content-security-policy-set.yaml"
+    },
+    {
+      "id": "pii-masking-in-logs",
+      "title": "PII Masked in Logs for PII-Bearing Environments",
+      "description": "In any environment that can hold real personally identifiable information, application logs must not emit raw PII (email, full name, phone, national id, card number, password, token). Sensitive fields must be masked, redacted, or omitted at the logging boundary. Raw PII in logs is the most common way regulated data leaks into systems with weaker access controls (log aggregators, error trackers, terminals).\n",
+      "category": "security",
+      "gsProperty": "defended",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "cli",
+      "check": "Scan source for logging calls that pass known-sensitive fields directly. Grep for logger/console/print statements that interpolate fields named password, token, secret, ssn, creditCard, cardNumber, email, phone without a mask/redact wrapper. Example: grep -rEn '(log(ger)?\\.(info|debug|warn|error)|console\\.(log|info)|print)\\(.*(password|token|secret|ssn|card|creditCard)' src/ Each hit must route the value through a masking helper (e.g. mask(), redact()).\n",
+      "passCriterion": "No logging statement emits a raw sensitive field. Sensitive values are masked or omitted before reaching any log sink in PII-bearing environments.\n",
+      "failureMessage": "A logging statement appears to emit raw PII/secret in an environment marked containsPii: true. Route the value through a masking/redaction helper or omit it.\n",
+      "fixHint": "Wrap sensitive values in a mask()/redact() helper before logging, or configure a log processor that strips known sensitive keys.\n",
+      "tags": [
+        "INFRA",
+        "API",
+        "HIPAA",
+        "SOC2",
+        "FINTECH",
+        "HEALTHCARE",
+        "UNIVERSAL"
+      ],
+      "priority": "P0",
+      "likelihood": "high",
+      "impact": "high",
+      "confidence": "medium",
+      "generalizable": true,
+      "evidence": "PII in plaintext logs is a top cause of reportable data exposure: the data is copied to log aggregators and error trackers that have broader access than the primary datastore, defeating the database-level controls. Masking at the log boundary is standard (OWASP Logging Cheat Sheet) but easy to forget on a new log line. This gate exists because the deployment schema advertised a \"PII logging gate\" / \"data masking gate\" for containsPii environments while no such gate was wired.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/security/pii-masking-in-logs.yaml"
+    },
+    {
+      "id": "security-headers-present",
+      "title": "Security Headers Present on Externally-Accessible Services",
+      "description": "Any environment reachable from the public internet must serve the baseline HTTP security headers: Strict-Transport-Security (HSTS), X-Content-Type-Options (nosniff), X-Frame-Options (or frame-ancestors via CSP), and Referrer-Policy. Missing headers leave externally-facing services open to clickjacking, MIME sniffing, protocol downgrade, and referrer leakage.\n",
+      "category": "security",
+      "gsProperty": "defended",
+      "phase": "pre-release",
+      "hook": "pre-push",
+      "implementation": "cli",
+      "check": "Inspect the server/middleware configuration (e.g. helmet for Express, secure headers middleware for FastAPI/Django, the reverse-proxy config, or a live curl -I against the deployed URL) and confirm these response headers are set: Strict-Transport-Security, X-Content-Type-Options: nosniff, X-Frame-Options (or a CSP frame-ancestors directive), Referrer-Policy. For a deployed target: curl -sI \"$API_URL\" | grep -iE 'strict-transport-security|x-content-type-options|x-frame-options|referrer-policy'\n",
+      "passCriterion": "All four baseline security headers are present in responses from every environment declared externallyAccessible: true (verified in middleware config or against the live endpoint).\n",
+      "failureMessage": "Externally-accessible environment is missing one or more baseline security headers (HSTS, X-Content-Type-Options, X-Frame-Options/CSP frame-ancestors, Referrer-Policy). Add a security-headers middleware (helmet, secure, etc.).\n",
+      "fixHint": "Add a security-headers middleware (Express: helmet(); FastAPI: secure.Secure; Django: SecurityMiddleware) or set the headers at the reverse proxy.\n",
+      "tags": [
+        "INFRA",
+        "API",
+        "UNIVERSAL"
+      ],
+      "priority": "P0",
+      "likelihood": "high",
+      "impact": "high",
+      "confidence": "high",
+      "generalizable": true,
+      "evidence": "Public services shipped without HSTS or X-Frame-Options are a recurring source of clickjacking and SSL-strip incidents. The headers are cheap, static, and universally recommended (OWASP Secure Headers Project), yet routinely omitted because nothing fails without them — exactly the silent gap a gate closes. This gate exists because the deployment schema advertised \"security headers gate\" for externallyAccessible environments while no such gate was wired.\n",
+      "status": "approved",
+      "approvedAt": "2026-06-11",
+      "contributor": "jghiringhelli",
+      "_path": "gates/security/security-headers-present.yaml"
+    },
+    {
+      "id": "external-render-snapshot",
+      "title": "External-Render Templates Require a Snapshot Test",
+      "description": "Any template that renders content consumed outside the app — PDF, email, CSV/JSON export, public webhook payload — must have a snapshot test that freezes a fixture input and compares the rendered output. Visual code review does not catch label drift, raw-enum leaks, or layout breaks. Snapshot diffs require explicit human approval; CI must not auto-update them.\n",
+      "category": "test-quality",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Identify modules that render external output (pdf, email, export, template, report renderers). 2. Confirm each has a colocated snapshot test that renders a fixture and asserts against a stored snapshot. 3. Confirm CI runs snapshots in non-updating mode (no --updateSnapshot / -u in the pipeline).\n",
+      "passCriterion": "Every external-render template has a snapshot test over a fixture; CI fails on snapshot drift rather than silently rewriting it.\n",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-058 — the generated PDF rendered raw enum values (strongly_recommended, quick_win) in user-visible badges for roughly three weeks. tsc passed, units passed, no test exercised the rendered HTML. A single snapshot test of the template would have failed the moment the label leaked.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-058 — PDF leaked raw enum labels for ~3 weeks; no test rendered the template output",
+        "discovered_in": "GS field use (Vairix), gap G6"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/test-quality/external-render-snapshot.yaml"
+    },
+    {
+      "id": "llm-output-replay-fixture",
+      "title": "LLM-Output-Consuming Code Must Test Against Recorded Replay Fixtures",
+      "description": "Any code that consumes model output — directly from an LLM client or downstream of a generation pipeline — must have at least one test that runs against a real recorded output (a replay fixture), not only hand-rolled synthetic mocks. Synthetic mocks encode the shape the author imagined; production emits enum values, escape sequences, and orderings the author did not. Capture real outputs with metadata (model, timestamp, phase) and replay them.\n",
+      "category": "test-quality",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Identify spec files for handlers under ai/ or pipeline/ (LLM consumers). 2. Confirm each imports at least one replay fixture from a recorded-outputs corpus. 3. Synthetic mocks are allowed only as a complement, never the sole input. 4. New pipeline phases add a fixture before their first green commit.\n",
+      "passCriterion": "Every LLM-output-consuming test exercises at least one recorded replay fixture; no model-consumer is tested on synthetic mocks alone.\n",
+      "tags": [
+        "ML",
+        "DATA-PIPELINE"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-088 — the promote-pattern endpoint tested with severity \"high\" but the model emitted \"moderate\"/\"severe\", breaking the enum cast with a 500 in production. DELTA-051/079 — the model emitted double-escaped JSON the synthetic mocks never produced. Tests mocked the OpenAI client, so the real output shape never reached an assertion.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-088 — endpoint 500 on real LLM enum value never present in synthetic test mocks",
+        "discovered_in": "GS field use (Vairix), gap G1"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/test-quality/llm-output-replay-fixture.yaml"
+    },
+    {
+      "id": "regression-fixture-on-bugfix",
+      "title": "Bug Fix Requires a Regression Test That Fails Before the Fix",
+      "description": "Every fix that closes a reported bug must add a regression test exercising the concrete input that broke (payload, document, click sequence, model output), and that test must fail against the pre-fix code. The breaking input becomes a permanent fixture. Without this, the same failure class returns with a near-identical sample because the lesson lived only in a changelog, not in an executable check.\n",
+      "category": "test-quality",
+      "gsProperty": "verifiable",
+      "phase": "development",
+      "hook": "pre-commit",
+      "check": "1. Detect commits whose type is fix( and whose message or linked tracker marks a bug transitioning to resolved. 2. Confirm the same commit adds or modifies a test under a regression fixtures path. 3. Confirm the test encodes the actual breaking input, not a synthetic restatement. 4. Ideally confirm the test fails against the parent commit.\n",
+      "passCriterion": "Every bug-closing fix commit touches a regression test/fixture that reproduces the original breaking input and would fail before the fix.\n",
+      "tags": [
+        "UNIVERSAL"
+      ],
+      "generalizable": true,
+      "evidence": "Vairix DELTA-079 was a regression of DELTA-051, itself a regression of DELTA-007 — a JSON-escape sanitizer bug returning under a cousin sample each time. The lesson was captured in a Corrections Log but the breaking document never entered fixtures, so the same class broke three times.\n",
+      "provenance": {
+        "experiment": "vairix-delta-050-100",
+        "finding": "DELTA-079/051/007 — same sanitizer bug class recurred three times; breaking sample never captured as a fixture",
+        "discovered_in": "GS field use (Vairix), gap G2"
+      },
+      "status": "approved",
+      "approvedAt": "2026-06-08",
+      "contributor": "jghiringhelli",
+      "_path": "gates/test-quality/regression-fixture-on-bugfix.yaml"
+    },
+    {
+      "id": "react-component-types-required",
+      "title": "React — All Components Have TypeScript Props Types (No Implicit Any)",
+      "description": "Every React component must have an explicit TypeScript props interface or type alias. Implicit `any` props types defeat TypeScript's ability to catch breaking prop changes at compile time — a prop renamed in a parent breaks at runtime, not at build time. This gate enforces the baseline type safety that makes component refactoring safe.\n",
+      "category": "type-safety",
+      "gsProperty": "verifiable",
+      "phase": "pre-commit",
+      "hook": "pre-commit",
+      "check": "Set `strict: true` in tsconfig.json (activates noImplicitAny). Confirm with: npx tsc --noEmit (must exit 0). Add to .eslintrc: \"@typescript-eslint/no-explicit-any\": \"error\" to prevent `any` workarounds. For React props specifically: every function component must have either:\n  - An explicit interface: `interface Props { ... }; const MyComp = (props: Props) => ...`\n  - An inline type: `const MyComp = ({ name }: { name: string }) => ...`\nComponents that accept children must type them: `children: React.ReactNode`.\n",
+      "passCriterion": "`npx tsc --noEmit` exits 0 with `strict: true` enabled. Zero @typescript-eslint/no-explicit-any violations in src/**/*.tsx. All component props interfaces are explicitly declared.\n",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT"
+      ],
+      "generalizable": true,
+      "evidence": "Components without typed props are the #1 source of breaking changes invisible at compile time in React codebases. TypeScript strict mode is zero-cost to add at project setup and exponentially expensive to retrofit into existing code. Adding it as a gate at project initialization costs nothing and prevents an entire class of runtime regressions from ever entering the codebase.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/type-safety/react-component-types-required.yaml"
+    },
+    {
       "id": "dependency-audit",
       "title": "Dependency CVE Audit — Pre-Commit Blocking Gate",
       "description": "Audit all project dependencies for known CVEs before every commit. Block on HIGH or CRITICAL vulnerabilities in direct dependencies.\n",
@@ -743,6 +1623,32 @@
       "approvedAt": "2026-03-19",
       "contributor": "jghiringhelli",
       "_path": "gates/universal/playwright-ui-smoke-test.yaml"
+    },
+    {
+      "id": "ux-pattern-docs-present",
+      "title": "UX Pattern Docs — Required Before Common Interactions",
+      "description": "Require docs/patterns/ with at minimum error.md and loading.md before page, modal, or table components are committed. These pattern docs are the single source of truth that prevents each feature team from implementing error and loading states differently. Without them, AI-assisted development generates fresh UI patterns per session.\n",
+      "category": "ux-consistency",
+      "gsProperty": "self-describing",
+      "phase": "development",
+      "hook": "pre-commit",
+      "implementation": "process",
+      "os": "cross-platform",
+      "check": "When staged files include any file matching *page*, *Page*, *screen*, *Screen*, *modal*, *Modal*, *table*, or *Table* naming patterns, verify that docs/patterns/error.md and docs/patterns/loading.md exist. If either is missing, block the commit.\n",
+      "passCriterion": "docs/patterns/ contains at minimum error.md and loading.md before any page, modal, or table components are committed. Each pattern doc defines: when to use, appearance, component API, error cases, and empty state behaviour.\n",
+      "failureMessage": "UX pattern docs missing. Create docs/patterns/error.md and docs/patterns/loading.md before implementing page or interactive components.\n",
+      "fixHint": "mkdir -p docs/patterns && touch docs/patterns/error.md docs/patterns/loading.md docs/patterns/empty.md docs/patterns/modals.md docs/patterns/tables.md",
+      "tags": [
+        "WEB-REACT",
+        "WEB-NEXT",
+        "WEB-STATIC"
+      ],
+      "generalizable": true,
+      "evidence": "Applications without shared UX pattern docs develop inconsistent error, loading, and empty state treatments across features. Users encounter different behaviours for the same interaction type in different parts of the same app — a trust-eroding inconsistency that emerges specifically from AI-assisted development where each session starts fresh without context from prior implementation decisions.\n",
+      "status": "approved",
+      "approvedAt": "2026-05-29",
+      "contributor": "jghiringhelli",
+      "_path": "gates/ux-consistency/ux-pattern-docs-present.yaml"
     }
   ]
 }
